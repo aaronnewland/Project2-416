@@ -12,7 +12,7 @@
  */
 int main(int argc, char **argv) {
 
-	/* Implement HERE */
+	printf("hello world\n");
 
 	return 0;
 }

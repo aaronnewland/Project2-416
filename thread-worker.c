@@ -4,6 +4,8 @@
 // username of iLab:
 // iLab Server:
 
+#include <stdio.h>
+#include <unistd.h>
 #include "thread-worker.h"
 
 //Global counter for total context switches and 
@@ -22,6 +24,7 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
                       void *(*function)(void*), void * arg) {
 
        // - create Thread Control Block (TCB)
+	   tcb *block;
        // - create and initialize the context of this worker thread
        // - allocate space of stack for this thread to run
        // after everything is set, push this thread into run queue and 
