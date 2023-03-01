@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ucontext.h>
 
 typedef uint worker_t;
 
@@ -29,6 +30,12 @@ typedef struct TCB {
 	// thread stack
 	// thread priority
 	// And more ...
+	int id;
+	char status;
+	ucontext_t context;
+	void* stack;
+	int priority;
+
 
 	// YOUR CODE HERE
 } tcb; 
