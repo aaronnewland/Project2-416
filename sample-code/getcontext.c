@@ -8,7 +8,7 @@
 #define STACK_SIZE SIGSTKSZ
 
 int main(int argc, char **argv) {
-	ucontext_t cctx,ncctx;
+	ucontext_t cctx;
 	
 	if (argc != 1) {
 		printf(": USAGE Program Name and No  Arguments expected\n");

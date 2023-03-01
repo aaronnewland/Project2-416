@@ -15,6 +15,8 @@ double avg_resp_time=0;
 
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
 // YOUR CODE HERE
+char sched_not_init = 1;
+ucontext_t sched_ctx;
 
 
 /* create a new thread */
@@ -28,7 +30,22 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
        // - make it ready for the execution.
 
        // YOUR CODE HERE
-	
+	   	if(sched_not_init){//first time thread created, create sched context
+			getcontext(&sched_ctx);
+		}
+		ucontext_t block->&context;
+		struct TCB *block = malloc(sizeof(struct TCB));
+		void *stack = malloc(STACK_SIZE);
+		block->stack = stack;
+		getcontext(&block->&context);
+		block->context.uc_link = NULL;
+		block->context.uc_stack.ss_sp = stack;
+		block->context.uc_stack.ss_size = STACK_SIZE;
+		block->context.uc_stack.ss_flags = 0;
+		makecontext(&block->&context, (void*)&function, 0);
+		block->id = thread;
+		block->status = READY;
+		
     return 0;
 };
 
@@ -155,4 +172,7 @@ void print_app_stats(void) {
 // Feel free to add any other functions you need
 
 // YOUR CODE HERE
+int main(){
+	return 0;
+}
 
