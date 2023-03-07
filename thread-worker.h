@@ -40,7 +40,7 @@ typedef struct TCB {
 	// And more ...
 	worker_t id;
 	int status;
-	ucontext_t context;
+	ucontext_t *context;
 	void* stack;
 	int priority;
 
@@ -61,8 +61,26 @@ typedef struct worker_mutex_t {
 
 // YOUR CODE HERE
 
+//node for scheduler queue
+//contains the tcb of a thread, and the next thread in queue
+typedef struct node{
+	tcb block;
+	struct node *next;
+}node;
 
+//basic queue structure using node
+//reference to head and queue count
+typedef struct queue{
+	struct node *head;
+	int count;
+}queue;
 /* Function Declarations: */
+
+//pop thread from queue
+tcb pop(queue *q){}
+
+//push to queue
+int push(queue *q, worker_t *thread){}
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, void

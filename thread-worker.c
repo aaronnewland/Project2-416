@@ -17,7 +17,21 @@ double avg_resp_time=0;
 // YOUR CODE HERE
 char sched_not_init = 1;
 ucontext_t sched_ctx;
+void *s_stack;
+int tcount = 0;
 
+//queue functions
+tcb pop(queue *q){
+	node *ret = q->head;
+	q->head = q->head.next;
+
+	return ret->block;
+}
+
+int push(queue *q, worker_t *thread){
+
+	return 0;
+}
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
@@ -31,19 +45,30 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 
        // YOUR CODE HERE
 	   	if(sched_not_init){//first time thread created, create sched context
+			struct TCB *s_block = malloc(sizeof(struct TCB));
 			getcontext(&sched_ctx);
+			s_stack = malloc(STACK_SIZE);
+			sched_ctx.uc_link = NULL;
+			sched_ctx.uc_stack.ss_sp = s_stack;
+			sched_ctx.uc_stack.ss_size = STACK_SIZE;
+			sched_ctx.uc_stack.ss_flags = 0;
+			makecontext(&sched_ctx, (void*)&schedule, 0);
+			//initialize timer
+
 		}
-		ucontext_t block->&context;
+
 		struct TCB *block = malloc(sizeof(struct TCB));
 		void *stack = malloc(STACK_SIZE);
-		block->stack = stack;
-		getcontext(&block->&context);
-		block->context.uc_link = NULL;
+		*block.stack = stack;
+		getcontext(*block.context);
+		*block.context.uc_link = NULL;
 		block->context.uc_stack.ss_sp = stack;
 		block->context.uc_stack.ss_size = STACK_SIZE;
 		block->context.uc_stack.ss_flags = 0;
-		makecontext(&block->&context, (void*)&function, 0);
-		block->id = thread;
+		makecontext(block->context, (void*)&function, 0);
+		block->id = tcount;
+		*thread = tcount; 
+		tcount++;
 		block->status = READY;
 		
     return 0;
