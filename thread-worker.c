@@ -21,14 +21,19 @@ void *s_stack;
 int tcount = 0;
 
 //queue functions
-tcb pop(queue *q){
+worker_t pop(queue *q){
 	node *ret = q->head;
-	q->head = q->head.next;
-
-	return ret->block;
+	q->head = q->head->next;
+	q->count--;
+	worker_t r = ret->block->id;
+	free(ret);
+	return r;
 }
 
 int push(queue *q, worker_t *thread){
+	node *tmp;
+	tmp = malloc (sizeof(node));
+	tmp->id;
 
 	return 0;
 }
@@ -59,9 +64,9 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 
 		struct TCB *block = malloc(sizeof(struct TCB));
 		void *stack = malloc(STACK_SIZE);
-		*block.stack = stack;
-		getcontext(*block.context);
-		*block.context.uc_link = NULL;
+		block->stack = stack;
+		getcontext(block->context);
+		block->context.uc_link = NULL;
 		block->context.uc_stack.ss_sp = stack;
 		block->context.uc_stack.ss_size = STACK_SIZE;
 		block->context.uc_stack.ss_flags = 0;
