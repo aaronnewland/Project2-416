@@ -13,10 +13,10 @@
 #define USE_WORKERS 1
 
 // Define macros for thread status
-// Ready, Blocked, and Running
+// Ready, Sheduled, and Blocked
 #define READY 0
-#define BLOCKED 1
-#define RUNNING 2
+#define SCHEDULED 1
+#define BLOCKED 2
 
 /* include lib header files that you need here: */
 #include <unistd.h>
@@ -38,9 +38,11 @@ typedef struct TCB {
 	ucontext_t context;
 	// thread stack
 	void* threadStack;
-	// thread priority
+	// thread priority, default 0
 	int priority;
 	// And more ...
+	// TODO: delete this value if we don't need it
+	worker_t *thread;
 
 	// YOUR CODE HERE
 } tcb; 
@@ -51,6 +53,12 @@ typedef struct worker_mutex_t {
 
 	// YOUR CODE HERE
 } worker_mutex_t;
+
+/* node struct for linked list*/
+typedef struct Node {
+	tcb *block;
+	struct Node* next;
+} node;
 
 /* define your data structures here: */
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)

@@ -6,7 +6,17 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <ucontext.h>
+#include <sys/time.h>
+#include <string.h>
 #include "thread-worker.h"
+
+// Macro for stack size of each thread
+#define STACK_SIZE SIGSTKSZ
+#define DEBUG 1
 
 //Global counter for total context switches and 
 //average turn around and response time
@@ -14,23 +24,69 @@ long tot_cntx_switches=0;
 double avg_turn_time=0;
 double avg_resp_time=0;
 
-
-// INITAILIZE ALL YOUR OTHER VARIABLES HERE
-// YOUR CODE HERE
+static int id = 0;
+static node* head = NULL;
 
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
                       void *(*function)(void*), void * arg) {
+		// TODO: MEMORY CLEANUP!!!
+					
+		// - create Thread Control Block (TCB)
+		// Changes value for the caller as well. This is our thread ID.
+		*thread = ++id;
+		tcb *control_block = (tcb*)malloc(sizeof(tcb));
+		control_block->id = *thread;
+		control_block->thread = thread;
+		// - create and initialize the context of this worker thread
+		// TODO: implement context
+		// ucontext_t ctx;
+		// if (getcontext(&ctx) < 0) {
+		// 	perror("getcontext");
+		// 	exit(1);
+		// }
+		// void *stack = malloc(STACK_SIZE);
+		// if (stack == NULL) {
+		// 	perror("Failed to allocate stack");
+		// 	exit(1);
+		// }
 
-       // - create Thread Control Block (TCB)
-	   tcb *block;
-       // - create and initialize the context of this worker thread
-       // - allocate space of stack for this thread to run
-       // after everything is set, push this thread into run queue and 
-       // - make it ready for the execution.
+		if (head == NULL) {
+			// initialize data structures
+			head = (node*)malloc(sizeof(node));
+			head->next = NULL;
 
-       // YOUR CODE HERE
+			head->block = control_block;
+		} else {
+			node* thread_node = (node*)malloc(sizeof(node));
+
+			node* walk = head;
+			while (walk->next != NULL) {
+				walk = walk->next;
+			}
+
+			walk->next = thread_node;
+			thread_node->next = NULL;
+			thread_node->block = control_block;
+		}
+
+		if (DEBUG) {
+			printf("---------------------------------------\n");
+			node* walking = head;
+			while (walking != NULL) {
+				printf("walking id: %u\n", walking->block->id);
+				printf("walking thread: %u\n", walking->block->thread);
+				walking = walking->next;
+			}
+			printf("---------------------------------------\n");
+		}
+
+		// - allocate space of stack for this thread to run
+		// after everything is set, push this thread into run queue and 
+		// - make it ready for the execution.
+
+		// YOUR CODE HERE
 	
     return 0;
 };
@@ -57,7 +113,6 @@ void worker_exit(void *value_ptr) {
 
 /* Wait for thread termination */
 int worker_join(worker_t thread, void **value_ptr) {
-	
 	// - wait for a specific thread to terminate
 	// - de-allocate any dynamic memory created by the joining thread
   
