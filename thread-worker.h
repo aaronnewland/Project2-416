@@ -55,8 +55,6 @@ typedef struct TCB {
 	// function thread was created with
 	// TODO: delete this if not needed
 	void* func;
-
-	// YOUR CODE HERE
 } tcb; 
 
 /* mutex struct definition */
@@ -66,17 +64,19 @@ typedef struct worker_mutex_t {
 	// YOUR CODE HERE
 } worker_mutex_t;
 
+/* define your data structures here: */
+// Feel free to add your own auxiliary data structures (linked list or queue etc...)
+
 /* node struct for linked list*/
 typedef struct Node {
 	tcb *block;
 	struct Node* next;
 } node;
 
-/* define your data structures here: */
-// Feel free to add your own auxiliary data structures (linked list or queue etc...)
-
-// YOUR CODE HERE
-
+/* queue struct for runqueue*/
+typedef struct Queue {
+	node *front, *back;
+} queue;
 
 /* Function Declarations: */
 
@@ -109,6 +109,21 @@ int worker_mutex_destroy(worker_mutex_t *mutex);
 
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);
+
+/* node functions */
+/* create linked list node */
+node* node_create(tcb *block);
+
+/* queue functions */
+/* initialize queue */
+queue* queue_init();
+/* enqueue node */
+void enqueue(queue* q, tcb *block);
+/* dequeue node */
+void dequeue(queue* q);
+/* prints out all nodes in queue from front to back */
+void print_queue(queue* q);
+void test_dequeue();
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t

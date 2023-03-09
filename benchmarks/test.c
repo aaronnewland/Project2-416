@@ -38,6 +38,7 @@ int main(int argc, char **argv) {
         if (DEBUG) {
             printf("thread create = %u\n", &thread[i]);
             printf("thread2 = %u\n", thread[i]);
+            printf("--------------------------\n");
         }
         
         pthread_create(&thread[i], NULL, &foo, NULL);
@@ -45,6 +46,7 @@ int main(int argc, char **argv) {
     pthread_create(&thread[THREAD_NUM-1], NULL, &bar, NULL);
     if (DEBUG) {
         // prints out all threads and their IDs
+        printf("--------------------------\n");
         for (int i = 0; i < THREAD_NUM; ++i) {
             printf("thread = %u\n", &thread[i]);
             printf("thread2 = %u\n", thread[i]);

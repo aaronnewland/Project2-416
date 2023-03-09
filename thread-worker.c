@@ -18,7 +18,8 @@ double avg_resp_time=0;
 
 static int id = 0;
 static node* head = NULL;
-
+int runqueue_init = 0;
+queue* runqueue;
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
@@ -34,7 +35,8 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		control_block->status = READY;
 		control_block->thread = thread;
 		control_block->func = function;
-		// Create stack for thread
+
+		// - allocate space of stack for this thread to run
 		void *stack = malloc(STACK_SIZE);
 		if (stack == NULL) {
 			perror("Failed to allocate stack");
@@ -58,42 +60,16 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		// set context in TCB
 		control_block->context = ctx;
 
-		// Set up linked list if head has not been initialized.
-		if (head == NULL) {
-			// initialize data structures
-			head = (node*)malloc(sizeof(node));
-			head->next = NULL;
-
-			head->block = control_block;
-		// Append to end of linked list if head has been initialized.
-		} else {
-			node* thread_node = (node*)malloc(sizeof(node));
-
-			node* walk = head;
-			while (walk->next != NULL) {
-				walk = walk->next;
-			}
-
-			walk->next = thread_node;
-			thread_node->next = NULL;
-			thread_node->block = control_block;
-		}
-
-		if (DEBUG) {
-			printf("---------------------------------------\n");
-			node* walking = head;
-			while (walking != NULL) {
-				printf("walking id: %u\n", walking->block->id);
-				printf("walking thread: %u\n", walking->block->thread);
-				printf("walking status: %u\n", walking->block->status);
-				printf("walking threadStack: %p\n", walking->block->threadStack);
-				walking = walking->next;
-			}
-			printf("---------------------------------------\n");
-		}
-
-		// - allocate space of stack for this thread to run
 		// after everything is set, push this thread into run queue and 
+		// initialize runqueue if not initialized
+		if (runqueue_init == 0) {
+			runqueue = queue_init(); 
+			runqueue_init = 1;
+		}
+		enqueue(runqueue, control_block);
+		
+		if (DEBUG) print_queue(runqueue);
+
 		// - make it ready for the execution.
 
 		// YOUR CODE HERE
@@ -221,6 +197,69 @@ void print_app_stats(void) {
 
 
 // Feel free to add any other functions you need
+/* create linked list node */
+node* node_create(tcb *block) {
+	node* thread_node = (node*)malloc(sizeof(node));
+	thread_node->next = NULL;
+	thread_node->block = block;
+	return thread_node;
+}
 
-// YOUR CODE HERE
+/* initialize queue */
+queue* queue_init() {
+	queue* q = (queue*)malloc(sizeof(queue));
+	q->front = NULL;
+	q->back = NULL;
+	return q;
+}
 
+/* enqueue node */
+void enqueue(queue* q, tcb *block) {
+	node* thread_node = node_create(block);
+	// check for empty queue
+	if (q->front == NULL) {
+		q->front = thread_node;
+		q->back = thread_node;
+		return;
+	}
+	// add to back of queue
+	q->back->next = thread_node;
+	q->back = thread_node;
+}
+
+// /* dequeue node */
+void dequeue(queue* q) {
+	// check for empty queue
+	if (q->front == NULL) return;
+
+	node* hold = q->front;
+	q->front = q->front->next;
+
+	// check for newly empty queue
+	if (q->front == NULL) q->back = NULL;
+
+	// clear memory for dequeued node
+	free(hold);
+}
+
+/* prints out all nodes in queue from front to back */
+void print_queue(queue* q) {
+	// check for empty queue
+	if (q->front == NULL) {
+		printf("Queue is Empty.\n");
+		return;
+	} 
+
+	node* walk = q->front;
+	printf("--------PRINTING_QUEUE--------\n");
+	while(walk != NULL) {
+		printf("Thread ID# = %u\n", walk->block->id);
+		printf("Thread address = %u\n", walk->block->thread);
+		printf("Thread status = %u\n", walk->block->status);
+		printf("Thread stack = %p\n", walk->block->threadStack);
+		printf("Thread function = %p\n", walk->block->func);
+		printf("--------------------------\n");
+		walk = walk->next;
+	}
+	printf("--------DONE_PRINTING--------\n");
+}
