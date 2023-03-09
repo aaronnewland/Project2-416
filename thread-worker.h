@@ -19,12 +19,15 @@
 #define BLOCKED 2
 
 /* include lib header files that you need here: */
-#include <unistd.h>
 #include <sys/syscall.h>
-#include <sys/types.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <sys/types.h>
 #include <ucontext.h>
+#include <sys/time.h>
+#include <string.h>
 
 typedef uint worker_t;
 
@@ -41,8 +44,17 @@ typedef struct TCB {
 	// thread priority, default 0
 	int priority;
 	// And more ...
+	// thread parent context
+	ucontext_t parent;
+	// thread child context
+	// TODO: delete this if not needed
+	ucontext_t child;
+	// thread address
 	// TODO: delete this value if we don't need it
 	worker_t *thread;
+	// function thread was created with
+	// TODO: delete this if not needed
+	void* func;
 
 	// YOUR CODE HERE
 } tcb; 

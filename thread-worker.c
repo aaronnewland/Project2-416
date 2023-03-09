@@ -4,14 +4,6 @@
 // username of iLab:
 // iLab Server:
 
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <ucontext.h>
-#include <sys/time.h>
-#include <string.h>
 #include "thread-worker.h"
 
 // Macro for stack size of each thread
@@ -38,26 +30,42 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		*thread = ++id;
 		tcb *control_block = (tcb*)malloc(sizeof(tcb));
 		control_block->id = *thread;
+		// Sets to READY status
+		control_block->status = READY;
 		control_block->thread = thread;
+		control_block->func = function;
+		// Create stack for thread
+		void *stack = malloc(STACK_SIZE);
+		if (stack == NULL) {
+			perror("Failed to allocate stack");
+			exit(1);
+		}
+		control_block->threadStack = stack;
 		// - create and initialize the context of this worker thread
-		// TODO: implement context
-		// ucontext_t ctx;
-		// if (getcontext(&ctx) < 0) {
-		// 	perror("getcontext");
-		// 	exit(1);
-		// }
-		// void *stack = malloc(STACK_SIZE);
-		// if (stack == NULL) {
-		// 	perror("Failed to allocate stack");
-		// 	exit(1);
-		// }
+		ucontext_t ctx_main, ctx;
+		if (getcontext(&ctx) < 0) {
+			perror("getcontext");
+			exit(1);
+		}
 
+		ctx.uc_link = &ctx_main;
+		ctx.uc_stack.ss_sp = stack;
+		ctx.uc_stack.ss_size = STACK_SIZE;
+		ctx.uc_stack.ss_flags = 0;
+
+		makecontext(&ctx, (void *)function, 0);
+
+		// set context in TCB
+		control_block->context = ctx;
+
+		// Set up linked list if head has not been initialized.
 		if (head == NULL) {
 			// initialize data structures
 			head = (node*)malloc(sizeof(node));
 			head->next = NULL;
 
 			head->block = control_block;
+		// Append to end of linked list if head has been initialized.
 		} else {
 			node* thread_node = (node*)malloc(sizeof(node));
 
@@ -77,6 +85,8 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 			while (walking != NULL) {
 				printf("walking id: %u\n", walking->block->id);
 				printf("walking thread: %u\n", walking->block->thread);
+				printf("walking status: %u\n", walking->block->status);
+				printf("walking threadStack: %p\n", walking->block->threadStack);
 				walking = walking->next;
 			}
 			printf("---------------------------------------\n");
