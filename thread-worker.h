@@ -117,13 +117,18 @@ node* node_create(tcb *block);
 /* queue functions */
 /* initialize queue */
 queue* queue_init();
+
 /* enqueue node */
 void enqueue(queue* q, tcb *block);
+
 /* dequeue node */
-void dequeue(queue* q);
+tcb* dequeue(queue* q);
+
 /* prints out all nodes in queue from front to back */
 void print_queue(queue* q);
-void test_dequeue();
+
+/* initializes scheduler context */
+void init_sched_ctx();
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t

@@ -18,13 +18,18 @@ double avg_resp_time=0;
 
 static int id = 0;
 static node* head = NULL;
-int runqueue_init = 0;
+int runqueue_init, sched_ctx_init = 0;
 queue* runqueue;
+ucontext_t sched_ctx, bench_ctx;
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
                       void *(*function)(void*), void * arg) {
 		// TODO: MEMORY CLEANUP!!!
+		if (sched_ctx_init == 0) {
+			init_sched_ctx();
+			sched_ctx_init = 1;
+		}
 					
 		// - create Thread Control Block (TCB)
 		// Changes value for the caller as well. This is our thread ID.
@@ -44,13 +49,13 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		}
 		control_block->threadStack = stack;
 		// - create and initialize the context of this worker thread
-		ucontext_t ctx_main, ctx;
+		ucontext_t ctx;
 		if (getcontext(&ctx) < 0) {
 			perror("getcontext");
 			exit(1);
 		}
 
-		ctx.uc_link = &ctx_main;
+		ctx.uc_link = &sched_ctx;
 		ctx.uc_stack.ss_sp = stack;
 		ctx.uc_stack.ss_size = STACK_SIZE;
 		ctx.uc_stack.ss_flags = 0;
@@ -147,6 +152,9 @@ int worker_mutex_destroy(worker_mutex_t *mutex) {
 
 /* scheduler */
 static void schedule() {
+	printf("in schedule\n");
+	//swapcontext(&bench_ctx, &sched_ctx);
+	setcontext(&bench_ctx);
 	// - every time a timer interrupt occurs, your worker thread library 
 	// should be contexted switched from a thread context to this 
 	// schedule() function
@@ -228,9 +236,9 @@ void enqueue(queue* q, tcb *block) {
 }
 
 // /* dequeue node */
-void dequeue(queue* q) {
+tcb* dequeue(queue* q) {
 	// check for empty queue
-	if (q->front == NULL) return;
+	if (q->front == NULL) return NULL;
 
 	node* hold = q->front;
 	q->front = q->front->next;
@@ -238,8 +246,11 @@ void dequeue(queue* q) {
 	// check for newly empty queue
 	if (q->front == NULL) q->back = NULL;
 
+	tcb *temp = hold->block;
+
 	// clear memory for dequeued node
 	free(hold);
+	return temp;
 }
 
 /* prints out all nodes in queue from front to back */
@@ -262,4 +273,28 @@ void print_queue(queue* q) {
 		walk = walk->next;
 	}
 	printf("--------DONE_PRINTING--------\n");
+}
+
+/* initializes scheduler context */
+void init_sched_ctx() {
+		// - allocate space of stack for this thread to run
+		void *stack = malloc(STACK_SIZE);
+		if (stack == NULL) {
+			perror("Failed to allocate stack");
+			exit(1);
+		}
+		// - create and initialize the context of this worker thread
+		if (getcontext(&sched_ctx) < 0) {
+			perror("getcontext");
+			exit(1);
+		}
+
+		sched_ctx.uc_link = NULL;
+		sched_ctx.uc_stack.ss_sp = stack;
+		sched_ctx.uc_stack.ss_size = STACK_SIZE;
+		sched_ctx.uc_stack.ss_flags = 0;
+
+		makecontext(&sched_ctx, (void *)&schedule, 0);
+
+		swapcontext(&bench_ctx, &sched_ctx);
 }
