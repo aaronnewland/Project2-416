@@ -5,6 +5,7 @@
 
 #define THREAD_NUM 4
 #define DEBUG 1
+#define MAX_COUNT 10
 
 /* A scratch program template on which to call and
  * test thread-worker library functions as you implement
@@ -15,19 +16,28 @@
  */
 
 pthread_t *thread;
+int count1, count2, count3, count4;
+count1 = 0;
+count2 = 0;
+count3 = 0;
+count4 = 0;
 
 void foo() {
-    while (1) {
+    while (count1 < MAX_COUNT) {
         puts("foo");
+        count1++;
     }
-    return;
+
+    pthread_exit(NULL);
 }
 
 void bar() {
-    while (1) {
+    while (count2 < MAX_COUNT) {
         puts("bar");
+        count2++;
     }
-    return;
+
+    pthread_exit(NULL);
 }
 
 int main(int argc, char **argv) {
@@ -42,6 +52,11 @@ int main(int argc, char **argv) {
         }
         
         pthread_create(&thread[i], NULL, &foo, NULL);
+    }
+    if (DEBUG) {
+        printf("thread create = %u\n", &thread[THREAD_NUM-1]);
+        printf("thread2 = %u\n", thread[THREAD_NUM-1]);
+        printf("--------------------------\n");
     }
     pthread_create(&thread[THREAD_NUM-1], NULL, &bar, NULL);
     if (DEBUG) {

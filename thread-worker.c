@@ -17,15 +17,18 @@ double avg_turn_time=0;
 double avg_resp_time=0;
 
 static int id = 0;
-static node* head = NULL;
-int runqueue_init, sched_ctx_init = 0;
-queue* runqueue;
+int runqueue_init, sched_ctx_init;
+queue* runqueue, mutexes;
 ucontext_t sched_ctx, bench_ctx;
+tcb* running = NULL;
+// struct sigaction sa;
+// struct itimerval timer;
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
                       void *(*function)(void*), void * arg) {
 		// TODO: MEMORY CLEANUP!!!
+		// initialize scheduler on first call to worker_create.
 		if (sched_ctx_init == 0) {
 			init_sched_ctx();
 			sched_ctx_init = 1;
@@ -66,29 +69,35 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		control_block->context = ctx;
 
 		// after everything is set, push this thread into run queue and 
+		// - make it ready for the execution.
+
 		// initialize runqueue if not initialized
 		if (runqueue_init == 0) {
 			runqueue = queue_init(); 
 			runqueue_init = 1;
 		}
 		enqueue(runqueue, control_block);
+
+		// if (running == NULL) {
+		// 	swapcontext(&bench_ctx, &sched_ctx);
+		// }
 		
 		if (DEBUG) print_queue(runqueue);
-
-		// - make it ready for the execution.
-
-		// YOUR CODE HERE
 	
     return 0;
 };
 
 /* give CPU possession to other user-level worker threads voluntarily */
 int worker_yield() {
+	// TODO: needs more work, not sure how to test at the moment.
+	puts("in yield");
 	
 	// - change worker thread's state from Running to Ready
+	running->status = READY;
 	// - save context of this thread to its thread control block
-	// - switch from thread context to scheduler context
 
+	// - switch from thread context to scheduler context
+	swapcontext(&running->context, &sched_ctx);
 	// YOUR CODE HERE
 	
 	return 0;
@@ -97,8 +106,17 @@ int worker_yield() {
 /* terminate a thread */
 void worker_exit(void *value_ptr) {
 	// - de-allocate any dynamic memory created when starting this thread
+	if (value_ptr != NULL) {
+		// do stuff with saving the return value
+	}
 
-	// YOUR CODE HERE
+	free(running->threadStack);
+	free(running);
+
+	printf("in exit: ");
+	print_queue(runqueue);
+
+	running = NULL;
 };
 
 
@@ -106,8 +124,12 @@ void worker_exit(void *value_ptr) {
 int worker_join(worker_t thread, void **value_ptr) {
 	// - wait for a specific thread to terminate
 	// - de-allocate any dynamic memory created by the joining thread
-  
-	// YOUR CODE HERE
+	if (value_ptr != NULL) {
+		// do stuff with saving the return value
+	}
+
+
+
 	return 0;
 };
 
@@ -116,7 +138,8 @@ int worker_mutex_init(worker_mutex_t *mutex,
                           const pthread_mutexattr_t *mutexattr) {
 	//- initialize data structures for this mutex
 
-	// YOUR CODE HERE
+
+
 	return 0;
 };
 
@@ -154,7 +177,28 @@ int worker_mutex_destroy(worker_mutex_t *mutex) {
 static void schedule() {
 	printf("in schedule\n");
 	//swapcontext(&bench_ctx, &sched_ctx);
-	setcontext(&bench_ctx);
+
+	if (running != NULL) {
+		if (running->status == RUNNING) {
+			running->status = READY;
+			enqueue(runqueue, running);
+		} else if (running->status == READY) {
+			enqueue(runqueue, running);
+		}
+	}
+
+	running = dequeue(runqueue);
+
+	if (running == NULL) {
+		setcontext(&bench_ctx);
+		//swapcontext(&sched_ctx, &bench_ctx);
+	}
+
+	running->status = RUNNING;
+
+	setcontext(&running->context);
+
+
 	// - every time a timer interrupt occurs, your worker thread library 
 	// should be contexted switched from a thread context to this 
 	// schedule() function
@@ -296,5 +340,36 @@ void init_sched_ctx() {
 
 		makecontext(&sched_ctx, (void *)&schedule, 0);
 
-		swapcontext(&bench_ctx, &sched_ctx);
+		init_timer();
+
+		//swapcontext(&bench_ctx, &sched_ctx);
+}
+
+void handler(int signum) {
+	puts("in handler");
+}
+
+/* initializes timer */
+void init_timer() {
+	puts("in timer");
+	struct sigaction sa;
+	memset (&sa, 0, sizeof (sa));
+	sa.sa_handler = &schedule;
+	sigaction (SIGPROF, &sa, NULL);
+
+	struct itimerval timer;
+
+	// Set up what the timer should reset to after the timer goes off
+	timer.it_interval.tv_usec = 1; 
+	timer.it_interval.tv_sec = 0;
+
+	// Set up the current timer to go off in 10 useconds
+	// Note: if both of the following values are zero
+	//       the timer will not be active, and the timer
+	//       will never go off even if you set the interval value
+	timer.it_value.tv_usec = 1;
+	timer.it_value.tv_sec = 0;
+
+	// Set the timer up (start the timer)
+	setitimer(ITIMER_PROF, &timer, NULL);
 }

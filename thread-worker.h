@@ -17,6 +17,7 @@
 #define READY 0
 #define SCHEDULED 1
 #define BLOCKED 2
+#define RUNNING 3
 
 /* include lib header files that you need here: */
 #include <sys/syscall.h>
@@ -59,9 +60,10 @@ typedef struct TCB {
 
 /* mutex struct definition */
 typedef struct worker_mutex_t {
-	/* add something here */
-
-	// YOUR CODE HERE
+	// set to 0 for unlock, and 1 for lock
+	int lock;
+	// queue of threads waiting to access mutex
+	struct Queue* wait;
 } worker_mutex_t;
 
 /* define your data structures here: */
@@ -129,6 +131,11 @@ void print_queue(queue* q);
 
 /* initializes scheduler context */
 void init_sched_ctx();
+
+void handler(int signum);
+
+/* initializes timer */
+void init_timer();
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
