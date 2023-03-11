@@ -160,20 +160,23 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
 
 
 		//problem: need to get current TCB so can enqueue to block queue in mutex
+		//update: noticed running var exists. assuming we keep up on that, should solve this.
 		
-		ucontext_t cont;
-		getcontext(&cont);
-		//we have context of thread, cycle through threads to find matching context?
-		//might be flawed thinking bc getcontext() not necessarily same as saved context in TCB 
-		//TODO: from context, get TCB!
-		tcb *thread;
-		node *head = runqueue->front;
-		while(head){
-			if(equals(head->block->context, cont)){ //equals() needed :( biggest assumption
-				thread = head->block;
-			}
-			head = head->next;
-		}
+		// ucontext_t cont;
+		// getcontext(&cont);
+		// //we have context of thread, cycle through threads to find matching context?
+		// //might be flawed thinking bc getcontext() not necessarily same as saved context in TCB 
+		// //TODO: from context, get TCB!
+		// tcb *thread;
+		// node *head = runqueue->front;
+		// while(head){
+		// 	if(equals(head->block->context, cont)){ //equals() needed :( biggest assumption
+		// 		thread = head->block;
+		// 	}
+		// 	head = head->next;
+		// }
+
+
 
 		//note: what is the "test-and-set" built-in function signature? found what it DOES:
 		//basically atomically checks a value (mutex->lock for us), and returns
@@ -181,10 +184,10 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
 		//most of this was gotten from wikipedia, take w/ grain of salt
 		if(test_and_set(mutex->lock) == 1){
 			// locked out, put thread in block queue
-			node *tmp = node_create(&thread);
+			node *tmp = node_create(&running);
 			enqueue(mutex->wait, tmp); //need tcb of current thread (one calling lock)
-			thread->status = BLOCKED;
-			swapcontext(&cont, &sched_ctx);
+			running->status = BLOCKED;
+			swapcontext(&running->context, &sched_ctx);
 			//swapcontext stops code from continuing, no return needed (?)
 		}
 		//hooray! lock was unlocked and you're good to go. (should be set by test_and_set() but...)
@@ -199,7 +202,7 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	// - release mutex and make it available again. 
 	// - put threads in block list to run queue 
 	// so that they could compete for mutex later.
-	
+
 	mutex->lock = 0;	//again, this isnt atomic but idk if that's req here
 
 	while(mutex->wait->front){ 
