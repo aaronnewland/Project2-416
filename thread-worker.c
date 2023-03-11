@@ -199,7 +199,15 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	// - release mutex and make it available again. 
 	// - put threads in block list to run queue 
 	// so that they could compete for mutex later.
+	
+	mutex->lock = 0;	//again, this isnt atomic but idk if that's req here
 
+	while(mutex->wait->front){ 
+		//mutex queue needs to be emptied, all nodes in mutex queue need to go to runqueue
+		tcb *block = dequeue(mutex->wait); //frees head, moves head forward
+		enqueue(&runqueue, block); //tcb from dequeue
+	}
+	//afaik that should be good? assuming while loop does work. (big if)
 	// YOUR CODE HERE
 	return 0;
 };
