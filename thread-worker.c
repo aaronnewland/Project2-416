@@ -158,14 +158,37 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
 
-		//note: what is the "test-and-set" built-in function? found what it DOES:
+
+		//problem: need to get current TCB so can enqueue to block queue in mutex
+		
+		ucontext_t cont;
+		getcontext(&cont);
+		//we have context of thread, cycle through threads to find matching context?
+		//might be flawed thinking bc getcontext() not necessarily same as saved context in TCB 
+		//TODO: from context, get TCB!
+		tcb *thread;
+		node *head = runqueue->front;
+		while(head){
+			if(equals(head->block->context, cont)){ //equals() needed :( biggest assumption
+				thread = head->block;
+			}
+			head = head->next;
+		}
+
+		//note: what is the "test-and-set" built-in function signature? found what it DOES:
 		//basically atomically checks a value (mutex->lock for us), and returns
 		//the OLD value. basically, returns 1 if locked, 0 unlocked.
 		//most of this was gotten from wikipedia, take w/ grain of salt
-		while(test_and_set(mutex->lock) == 1){
+		if(test_and_set(mutex->lock) == 1){
 			// locked out, put thread in block queue
-			enqueue(mutex->wait, )
+			node *tmp = node_create(&thread);
+			enqueue(mutex->wait, tmp); //need tcb of current thread (one calling lock)
+			thread->status = BLOCKED;
+			swapcontext(&cont, &sched_ctx);
+			//swapcontext stops code from continuing, no return needed (?)
 		}
+		//hooray! lock was unlocked and you're good to go. (should be set by test_and_set() but...)
+		mutex->lock = 1; //just to be sure (this might be bad since its not atomic?)
 
         // YOUR CODE HERE
         return 0;
