@@ -137,8 +137,15 @@ int worker_join(worker_t thread, void **value_ptr) {
 int worker_mutex_init(worker_mutex_t *mutex, 
                           const pthread_mutexattr_t *mutexattr) {
 	//- initialize data structures for this mutex
+	
+	//mutex param contains (empty) pointer to a mutex - this function will fill 
+	//pointer to our mutex struct.
+	mutex = malloc(sizeof(worker_mutex_t));
 
+	//now, our mutex contains an empty pointer to a queue. we create that queue
+	mutex->wait = queue_init();
 
+	//..should be good now?
 
 	return 0;
 };
