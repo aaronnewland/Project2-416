@@ -145,7 +145,7 @@ int worker_mutex_init(worker_mutex_t *mutex,
 	//now, our mutex contains an empty pointer to a queue. we create that queue
 	mutex->wait = queue_init();
 
-	//..should be good now?
+	//..should be good now? given what we have so far.
 
 	return 0;
 };
@@ -157,6 +157,15 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if the mutex is acquired successfully, enter the critical section
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
+
+		//note: what is the "test-and-set" built-in function? found what it DOES:
+		//basically atomically checks a value (mutex->lock for us), and returns
+		//the OLD value. basically, returns 1 if locked, 0 unlocked.
+		//most of this was gotten from wikipedia, take w/ grain of salt
+		while(test_and_set(mutex->lock) == 1){
+			// locked out, put thread in block queue
+			enqueue(mutex->wait, )
+		}
 
         // YOUR CODE HERE
         return 0;
@@ -176,6 +185,10 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex) {
 	// - de-allocate dynamic memory created in worker_mutex_init
+
+	//check mutex-> wait empty? assume user already has?
+	free(mutex->wait);
+	free(mutex);
 
 	return 0;
 };
