@@ -3,7 +3,7 @@
 #include <pthread.h>
 #include "../thread-worker.h"
 
-#define THREAD_NUM 4
+#define THREAD_NUM 2
 #define DEBUG 1
 #define MAX_COUNT 10
 
@@ -32,7 +32,7 @@ void foo() {
 }
 
 void bar() {
-    while (count2 < MAX_COUNT) {
+    while (1) {
         puts("bar");
         count2++;
     }

@@ -17,7 +17,7 @@ double avg_turn_time=0;
 double avg_resp_time=0;
 
 static int id = 0;
-int runqueue_init, sched_ctx_init;
+int runqueue_init, sched_ctx_init, bench_ctx_init = 0;
 queue* runqueue, mutexes;
 ucontext_t sched_ctx, bench_ctx;
 tcb* running = NULL;
@@ -78,9 +78,12 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		}
 		enqueue(runqueue, control_block);
 
-		// if (running == NULL) {
-		// 	swapcontext(&bench_ctx, &sched_ctx);
-		// }
+		printf("BEFORE: ");
+		print_queue(runqueue);
+
+		if (running == NULL) {
+			swapcontext(&bench_ctx, &sched_ctx);
+		}
 		
 		if (DEBUG) print_queue(runqueue);
 	
@@ -113,7 +116,7 @@ void worker_exit(void *value_ptr) {
 	free(running->threadStack);
 	free(running);
 
-	printf("in exit: ");
+	printf("in exit: \n");
 	print_queue(runqueue);
 
 	running = NULL;
@@ -178,7 +181,51 @@ static void schedule() {
 	printf("in schedule\n");
 	//swapcontext(&bench_ctx, &sched_ctx);
 
+	if (bench_ctx_init == 0) {
+		// tcb *control_block = (tcb*)malloc(sizeof(tcb));
+		// control_block->id = ++id;
+		// control_block->status = READY;
+		// //control_block->thread = thread;
+		// //control_block->func = function;
+		// // - allocate space of stack for this thread to run
+		// void *stack = malloc(STACK_SIZE);
+		// if (stack == NULL) {
+		// 	perror("Failed to allocate stack");
+		// 	exit(1);
+		// }
+		// control_block->threadStack = stack;
+		// // - create and initialize the context of this worker thread
+		// // ucontext_t ctx;
+		// // if (getcontext(&ctx) < 0) {
+		// // 	perror("getcontext");
+		// // 	exit(1);
+		// // }
+
+		// bench_ctx.uc_link = &sched_ctx;
+		// bench_ctx.uc_stack.ss_sp = stack;
+		// bench_ctx.uc_stack.ss_size = STACK_SIZE;
+		// bench_ctx.uc_stack.ss_flags = 0;
+
+		// //makecontext(&ctx, (void *)function, 0);
+
+		// // set context in TCB
+		// control_block->context = bench_ctx;
+		// enqueue(runqueue, control_block);
+
+		tcb *control_block = (tcb*)malloc(sizeof(tcb));
+		control_block->context = bench_ctx;
+		control_block->id = ++id;
+		enqueue(runqueue, control_block);
+
+		print_queue(runqueue);
+
+		bench_ctx_init = 1;
+	}
+
 	if (running != NULL) {
+
+		printf("running: %u\n", running->id);
+
 		if (running->status == RUNNING) {
 			running->status = READY;
 			enqueue(runqueue, running);
