@@ -53,7 +53,7 @@ typedef struct TCB {
 	ucontext_t child;
 	// thread address
 	// TODO: delete this value if we don't need it
-	worker_t thread;
+	worker_t *thread;
 	// function thread was created with
 	// TODO: delete this if not needed
 	void* func;
@@ -139,7 +139,7 @@ void handler(int signum);
 /* initializes timer */
 void init_timer();
 
-int find_wait(worker_t thread, worker_t find);
+int find_wait(worker_t find);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
