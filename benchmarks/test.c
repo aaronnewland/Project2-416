@@ -23,8 +23,8 @@ count3 = 0;
 count4 = 0;
 
 void foo() {
-    while (count1 < MAX_COUNT) {
-        puts("foo");
+    while (1) {
+        //puts("foo");
         count1++;
     }
 
@@ -33,7 +33,7 @@ void foo() {
 
 void bar() {
     while (1) {
-        puts("bar");
+        //puts("bar");
         count2++;
     }
 
@@ -67,6 +67,9 @@ int main(int argc, char **argv) {
             printf("thread2 = %u\n", thread[i]);
         }
     }
+
+    pthread_join(thread[0], NULL);
+    pthread_join(thread[1], NULL);
 
     // Free memory on Heap
 	free(thread);
