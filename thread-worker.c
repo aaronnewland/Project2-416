@@ -273,6 +273,39 @@ static void sched_mlfq() {
 	// YOUR CODE HERE
 }
 
+//preemptive RR scheduling algorithm
+static void sched_rr(){
+	
+	if(running->status == SCHEDULED){
+		running->status == READY;
+	}
+
+	tcb *next_job = dequeue(runqueue);
+	//probably should check next_job exists
+	if(next_job == NULL){
+		return -1;
+	}
+
+}
+
+//timer handler, just needs to swap cont to scheduler
+void handler(int signum){
+	swapcontext(&running->context, &sched_ctx);
+}
+
+void init_timer(){
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = &handler;
+	sigaction(SIGPROF, &sa, NULL);
+
+	struct itimerval timer;
+	timer.it_interval.tv_sec = 1; //set activation time
+	timer.it_value.tv_sec = 0;	//set where timer returns to
+
+	setitimer(ITIMER_PROF, &timer, NULL);
+}
+
 //DO NOT MODIFY THIS FUNCTION
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void) {
