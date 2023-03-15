@@ -276,9 +276,7 @@ static void sched_mlfq() {
 //preemptive RR scheduling algorithm
 static void sched_rr(){
 	
-	if(running->status == SCHEDULED){
-		running->status == READY;
-	}
+	
 
 	tcb *next_job = dequeue(runqueue);
 	//probably should check next_job exists
@@ -286,7 +284,13 @@ static void sched_rr(){
 		return -1;
 	}
 	next_job->status = SCHEDULED;
-	enqueue(runqueue, running);
+	//if running is completed, we shouldnt enqueue it
+	if(running != NULL){	
+		if(running->status == SCHEDULED){
+			running->status == READY;
+		}
+		enqueue(runqueue, running);
+	}
 	running = next_job;
 	swapcontext(&sched_ctx, &running->context);
 
