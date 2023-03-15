@@ -285,6 +285,10 @@ static void sched_rr(){
 	if(next_job == NULL){
 		return -1;
 	}
+	next_job->status = SCHEDULED;
+	enqueue(runqueue, running);
+	running = next_job;
+	swapcontext(&sched_ctx, &running->context);
 
 }
 
