@@ -5,7 +5,7 @@
 
 #define THREAD_NUM 2
 #define DEBUG 1
-#define MAX_COUNT 10
+#define MAX_COUNT 20
 
 /* A scratch program template on which to call and
  * test thread-worker library functions as you implement
@@ -24,21 +24,21 @@ count4 = 0;
 pthread_mutex_t mutex;
 
 void foo() {
-    while (1) {
-        //puts("foo");
+    while (count1 < MAX_COUNT) {
+        puts("foo");
         count1++;
     }
 
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
 }
 
 void bar() {
-    while (1) {
-        //puts("bar");
+    while (count2 < MAX_COUNT) {
+        puts("bar");
         count2++;
     }
 
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
 }
 
 int main(int argc, char **argv) {
@@ -85,8 +85,7 @@ int main(int argc, char **argv) {
 }
 */
 
-pthread_t t1, t2;
-//, t3, t4;
+pthread_t t1, t2, t3, t4;
 pthread_mutex_t mutex;
 int x = 0;
 int loop = 10000;
@@ -119,24 +118,25 @@ int main(int argc, char *argv[]) {
     printf("Going to run four threads to increment x up to %d\n", 4 * loop);
 
     //Initialize mutex.
-    printf("mutex = %u\n", &mutex);
+    // printf("mutex = %u\n", &mutex);
     pthread_mutex_init(&mutex, NULL);
 
     //Create worker threads.
     pthread_create(&t1, NULL, add_counter, NULL);
     pthread_create(&t2, NULL, add_counter, NULL);
-    // pthread_create(&t3, NULL, add_counter, NULL);
-    // pthread_create(&t4, NULL, add_counter, NULL);
+    pthread_create(&t3, NULL, add_counter, NULL);
+    pthread_create(&t4, NULL, add_counter, NULL);
 
     //Join the threads
     pthread_join(t1, NULL);
     pthread_join(t2, NULL);
-    // pthread_join(t3, NULL);
-    // pthread_join(t4, NULL);
+    pthread_join(t3, NULL);
+    pthread_join(t4, NULL);
 
     //Destroy mutex.
     pthread_mutex_destroy(&mutex);
 
+    printf("Going to run four threads to increment x up to %d\n", 4 * loop);
     printf("The final value of x is %d\n", x);
 
     return 0;

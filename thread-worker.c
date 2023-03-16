@@ -8,7 +8,7 @@
 
 // Macro for stack size of each thread
 #define STACK_SIZE SIGSTKSZ
-#define DEBUG 1
+#define DEBUG 0
 
 
 //Global counter for total context switches and 
@@ -154,9 +154,6 @@ int worker_join(worker_t thread, void **value_ptr) {
 		// do stuff with saving the return value
 	}
 
-	printf("IN WORKER_JOIN: thread = %u\n", thread);
-	printf("IN WORKER_JOIN: running id = %u\n", running->id);
-
 	if (DEBUG) {
 		printf("IN WORKER_JOIN: thread = %u\n", thread);
 		printf("IN WORKER_JOIN: running id = %u\n", running->id);
@@ -186,7 +183,7 @@ int worker_join(worker_t thread, void **value_ptr) {
 int worker_mutex_init(worker_mutex_t *mutex, 
                           const pthread_mutexattr_t *mutexattr) {
 	//- initialize data structures for this mutex
-	printf("mutex_create = %u\n", mutex);
+	if (DEBUG) printf("mutex_create = %u\n", mutex);
 
 	//mutex = (worker_mutex_t*)malloc(sizeof(worker_mutex_t));
 	// if (mutex == NULL) {
@@ -206,13 +203,15 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
 
-		printf("BEGINNING mutex lock: %u\n", mutex->lock);
 		printf("BEGINNING mutex lock threadID: %u\n", running->id);
+		printf("BEGINNING mutex lock: %u\n", mutex->lock);
     
 		while (__sync_lock_test_and_set(&mutex->lock, LOCK)) {
 			if (DEBUG) puts("I'm in teh while for mutx");
 			running->status = BLOCKED;
 			enqueue(mutex->wait, running);
+			printf("WAITLIST LOCK: ");
+			print_queue(mutex->wait);
 			swapcontext(&running, &sched_ctx);
 		}
 
@@ -242,13 +241,16 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 		walk = dequeue(mutex->wait);
 	}
 
+	printf("WAITLIST UNLOCK: ");
+	print_queue(mutex->wait);
+
 	return 0;
 };
 
 
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex) {
-	printf("mutex to destroy = %u\n", mutex);
+	if (DEBUG)  printf("mutex to destroy = %u\n", mutex);
 	// TODO: memory cleanup for freeing mutex if needed
 	// - de-allocate dynamic memory created in worker_mutex_init
 	// if(dequeue(mutex->wait) != NULL) {
@@ -275,14 +277,18 @@ static void schedule() {
 			running->status = READY;
 		}
 
-		enqueue(runqueue, running);		
-	} else puts("running going into sched: NULL");
+		if (running->status != BLOCKED) {
+			enqueue(runqueue, running);	
+		}	
+	} else if (DEBUG)  puts("running going into sched: NULL");
+
+	// puts("AFTER");
 
 	running = dequeue(runqueue);
 
 	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n", running->id);
 
-	print_queue(runqueue);
+	if (DEBUG) print_queue(runqueue);
 
 	setcontext(&running->context);
 
@@ -433,7 +439,7 @@ void init_sched_ctx() {
 
 /* initializes timer */
 void init_timer() {
-	puts("in timer");
+	if (DEBUG) puts("in timer");
 	struct sigaction sa;
 	memset (&sa, 0, sizeof (sa));
 	sa.sa_handler = &schedule;
@@ -459,11 +465,11 @@ void init_timer() {
 int find_wait(worker_t find){
 	node* walk = runqueue->front;
 		while(walk != NULL) {
-			printf("WALKING: Thread ID# = %u\n", walk->block->id);
+			if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
 
 			// The thread is still running
 			if (walk->block->id == find) {
-				puts("we found it!!");
+				if (DEBUG) puts("we found it!!");
 				return 0;
 			}
 
