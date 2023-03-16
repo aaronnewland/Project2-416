@@ -20,6 +20,9 @@
 #define RUNNING 3
 #define WAITING 4
 
+#define LOCK 1
+#define UNLOCK 0
+
 /* include lib header files that you need here: */
 #include <sys/syscall.h>
 #include <stdio.h>
@@ -57,7 +60,10 @@ typedef struct TCB {
 	// function thread was created with
 	// TODO: delete this if not needed
 	void* func;
+	// holds id of thread waiting to exit
 	worker_t *wait_id;
+	// holds mutex information
+	struct worker_mutex_t* mutex;
 } tcb; 
 
 /* mutex struct definition */
