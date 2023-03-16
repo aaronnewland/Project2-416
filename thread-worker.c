@@ -55,6 +55,7 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 			running->status = RUNNING;
 
 			init_sched_ctx();
+			init_timer();
 			init = 1;
 		}
 
@@ -377,6 +378,31 @@ void init_sched_ctx() {
 		makecontext(&sched_ctx, (void *)&schedule, 0);
 
 		return;
+}
+
+/* initializes timer */
+void init_timer() {
+	puts("in timer");
+	struct sigaction sa;
+	memset (&sa, 0, sizeof (sa));
+	sa.sa_handler = &schedule;
+	sigaction (SIGPROF, &sa, NULL);
+
+	struct itimerval timer;
+
+	// Set up what the timer should reset to after the timer goes off
+	timer.it_interval.tv_usec = 1; 
+	timer.it_interval.tv_sec = 0;
+
+	// Set up the current timer to go off in 1 useconds
+	// Note: if both of the following values are zero
+	//       the timer will not be active, and the timer
+	//       will never go off even if you set the interval value
+	timer.it_value.tv_usec = 1;
+	timer.it_value.tv_sec = 0;
+
+	// Set the timer up (start the timer)
+	setitimer(ITIMER_PROF, &timer, NULL);
 }
 
 int find_wait(worker_t find){

@@ -23,7 +23,7 @@ count3 = 0;
 count4 = 0;
 
 void foo() {
-    while (count1 < MAX_COUNT) {
+    while (1) {
         puts("foo");
         count1++;
     }
@@ -32,7 +32,7 @@ void foo() {
 }
 
 void bar() {
-    while (count2 < MAX_COUNT) {
+    while (1) {
         puts("bar");
         count2++;
     }

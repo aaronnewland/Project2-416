@@ -139,6 +139,7 @@ void handler(int signum);
 /* initializes timer */
 void init_timer();
 
+/* finds if thread is in runqueue or not */
 int find_wait(worker_t find);
 
 #ifdef USE_WORKERS
