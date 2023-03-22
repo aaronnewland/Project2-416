@@ -160,6 +160,7 @@ int worker_join(worker_t thread, void **value_ptr) {
 	}
 
 	running->wait_id = thread;
+	if (DEBUG) printf("IN WORKER_JOIN: running->wait_id = %u\n", running->wait_id);
 	while (running->wait_id != -1) {
 		// thread waiting to join has terminiated
 		if (find_wait(thread) == 1) {
@@ -183,7 +184,7 @@ int worker_join(worker_t thread, void **value_ptr) {
 int worker_mutex_init(worker_mutex_t *mutex, 
                           const pthread_mutexattr_t *mutexattr) {
 	//- initialize data structures for this mutex
-	if (DEBUG) printf("mutex_create = %u\n", mutex);
+	if (DEBUG) printf("mutex_create = %p\n", mutex);
 
 	//mutex = (worker_mutex_t*)malloc(sizeof(worker_mutex_t));
 	// if (mutex == NULL) {
@@ -203,23 +204,26 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
 
-		printf("BEGINNING mutex lock threadID: %u\n", running->id);
-		printf("BEGINNING mutex lock: %u\n", mutex->lock);
+		if (DEBUG) {
+			printf("BEGINNING mutex lock threadID: %u\n", running->id);
+			printf("BEGINNING mutex lock: %u\n", mutex->lock);
+		}
     
 		while (__sync_lock_test_and_set(&mutex->lock, LOCK)) {
-			if (DEBUG) puts("I'm in teh while for mutx");
+			if (DEBUG) puts("I'm in the while for mutx");
 			running->status = BLOCKED;
 			enqueue(mutex->wait, running);
-			printf("WAITLIST LOCK: ");
-			print_queue(mutex->wait);
-			swapcontext(&running, &sched_ctx);
+			if (DEBUG) printf("WAITLIST LOCK: ");
+			if (DEBUG) print_queue(mutex->wait);
+			//swapcontext(&running->context, &sched_ctx);
+			setcontext(&sched_ctx);
 		}
 
-		printf("END mutex lock: %u\n", mutex->lock);
+		if (DEBUG) printf("END mutex lock: %u\n", mutex->lock);
         
 
 
-		return 0;
+        return 0;
 };
 
 /* release the mutex lock */
@@ -234,15 +238,15 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	// 	running->status = RUNNING;
 	// }
 
-	node* walk = dequeue(mutex->wait);
+	tcb* walk = dequeue(mutex->wait);
 	while(walk != NULL) {
-		walk->block->status = READY;
-		enqueue(runqueue, walk->block);
+		walk->status = READY;
+		enqueue(runqueue, walk);
 		walk = dequeue(mutex->wait);
 	}
 
-	printf("WAITLIST UNLOCK: ");
-	print_queue(mutex->wait);
+	if (DEBUG) printf("WAITLIST UNLOCK: ");
+	if (DEBUG) print_queue(mutex->wait);
 
 	return 0;
 };
@@ -250,7 +254,7 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex) {
-	if (DEBUG)  printf("mutex to destroy = %u\n", mutex);
+	if (DEBUG)  printf("mutex to destroy = %p\n", mutex);
 	// TODO: memory cleanup for freeing mutex if needed
 	// - de-allocate dynamic memory created in worker_mutex_init
 	// if(dequeue(mutex->wait) != NULL) {
@@ -279,7 +283,8 @@ static void schedule() {
 
 		if (running->status != BLOCKED) {
 			enqueue(runqueue, running);	
-		}	
+		}		
+			
 	} else if (DEBUG)  puts("running going into sched: NULL");
 
 	// puts("AFTER");
@@ -402,7 +407,7 @@ void print_queue(queue* q) {
 	printf("--------PRINTING_QUEUE--------\n");
 	while(walk != NULL) {
 		printf("Thread ID# = %u\n", walk->block->id);
-		printf("Thread address = %u\n", walk->block->thread);
+		printf("Thread address = %p\n", walk->block->thread);
 		printf("Thread status = %u\n", walk->block->status);
 		printf("Thread stack = %p\n", walk->block->threadStack);
 		printf("Thread function = %p\n", walk->block->func);

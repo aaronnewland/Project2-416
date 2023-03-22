@@ -61,7 +61,7 @@ typedef struct TCB {
 	// TODO: delete this if not needed
 	void* func;
 	// holds id of thread waiting to exit
-	worker_t *wait_id;
+	worker_t wait_id;
 	// holds mutex information
 	struct worker_mutex_t* mutex;
 } tcb; 
