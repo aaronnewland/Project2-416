@@ -18,6 +18,10 @@
 #define SCHEDULED 1
 #define BLOCKED 2
 #define RUNNING 3
+#define WAITING 4
+
+#define LOCK 1
+#define UNLOCK 0
 
 /* include lib header files that you need here: */
 #include <sys/syscall.h>
@@ -56,6 +60,10 @@ typedef struct TCB {
 	// function thread was created with
 	// TODO: delete this if not needed
 	void* func;
+	// holds id of thread waiting to exit
+	worker_t wait_id;
+	// holds mutex information
+	struct worker_mutex_t* mutex;
 } tcb; 
 
 /* mutex struct definition */
@@ -136,6 +144,9 @@ void handler(int signum);
 
 /* initializes timer */
 void init_timer();
+
+/* finds if thread is in runqueue or not */
+int find_wait(worker_t find);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t
