@@ -23,6 +23,9 @@
 #define LOCK 1
 #define UNLOCK 0
 
+// in micro seconds
+#define QUANTUM 10
+
 /* include lib header files that you need here: */
 #include <sys/syscall.h>
 #include <stdio.h>
@@ -48,12 +51,9 @@ typedef struct TCB {
 	void* threadStack;
 	// thread priority, default 0
 	int priority;
-	// And more ...
-	// thread parent context
-	ucontext_t parent;
-	// thread child context
+	// number of time quantums elapsed
+	int elapsed;
 	// TODO: delete this if not needed
-	ucontext_t child;
 	// thread address
 	// TODO: delete this value if we don't need it
 	worker_t *thread;
@@ -82,6 +82,11 @@ typedef struct Node {
 	tcb *block;
 	struct Node* next;
 } node;
+
+typedef struct Mutex_node {
+	struct worker_mutex_t* mutex;
+	struct Mutex_node* next;
+} mutex_node;
 
 /* queue struct for runqueue*/
 typedef struct Queue {
@@ -116,6 +121,10 @@ int worker_mutex_unlock(worker_mutex_t *mutex);
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex);
 
+static void schedule();
+static void sched_psjf();
+static void sched_mlfq();
+
 
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);
@@ -147,6 +156,8 @@ void init_timer();
 
 /* finds if thread is in runqueue or not */
 int find_wait(worker_t find);
+
+tcb* find_shortest_job(queue* q);
 
 #ifdef USE_WORKERS
 #define pthread_t worker_t

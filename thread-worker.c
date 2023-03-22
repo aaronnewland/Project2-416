@@ -8,7 +8,7 @@
 
 // Macro for stack size of each thread
 #define STACK_SIZE SIGSTKSZ
-#define DEBUG 0
+#define DEBUG 1
 
 
 //Global counter for total context switches and 
@@ -24,6 +24,7 @@ int init = 0;
 ucontext_t sched_ctx;
 queue* runqueue;
 tcb* running = NULL;
+mutex_node* mutexes = NULL;
 
 
 /* create a new thread */
@@ -72,6 +73,7 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		control_block->status = READY;
 		control_block->thread = thread;
 		control_block->func = function;
+		control_block->elapsed = 0;
 
 		// - allocate space of stack for this thread to run
 		void *stack = malloc(STACK_SIZE);
@@ -183,6 +185,9 @@ int worker_join(worker_t thread, void **value_ptr) {
 /* initialize the mutex lock */
 int worker_mutex_init(worker_mutex_t *mutex, 
                           const pthread_mutexattr_t *mutexattr) {
+	if (mutexes == NULL) {
+		// DO STUFF
+	}
 	//- initialize data structures for this mutex
 	if (DEBUG) printf("mutex_create = %p\n", mutex);
 
@@ -272,6 +277,32 @@ int worker_mutex_destroy(worker_mutex_t *mutex) {
 
 /* scheduler */
 static void schedule() {
+	// - every time a timer interrupt occurs, your worker thread library 
+	// should be contexted switched from a thread context to this 
+	// schedule() function
+
+	// - invoke scheduling algorithms according to the policy (PSJF or MLFQ)
+
+	// if (sched == PSJF)
+	//		sched_psjf();
+	// else if (sched == MLFQ)
+	// 		sched_mlfq();
+
+// - schedule policy
+#ifndef MLFQ
+	// Choose PSJF
+	sched_psjf();
+#else 
+	// Choose MLFQ
+#endif
+
+}
+
+/* Pre-emptive Shortest Job First (POLICY_PSJF) scheduling algorithm */
+static void sched_psjf() {
+	// - your own implementation of PSJF
+	// (feel free to modify arguments and return types)
+
 	if (DEBUG) printf("in schedule\n");
 
 	if (running != NULL) {
@@ -289,42 +320,16 @@ static void schedule() {
 
 	// puts("AFTER");
 
-	running = dequeue(runqueue);
+	//running = dequeue(runqueue);
+	running = find_shortest_job(runqueue);
 
 	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n", running->id);
 
 	if (DEBUG) print_queue(runqueue);
 
+	running->elapsed += 1;
+	printf("RUNNING AT END OF SCHED: %u\n TIME CHUNKS ELAPSED: %u\n", running->id, running->elapsed);
 	setcontext(&running->context);
-
-	// - every time a timer interrupt occurs, your worker thread library 
-	// should be contexted switched from a thread context to this 
-	// schedule() function
-
-	// - invoke scheduling algorithms according to the policy (PSJF or MLFQ)
-
-	// if (sched == PSJF)
-	//		sched_psjf();
-	// else if (sched == MLFQ)
-	// 		sched_mlfq();
-
-	// YOUR CODE HERE
-
-// - schedule policy
-#ifndef MLFQ
-	// Choose PSJF
-#else 
-	// Choose MLFQ
-#endif
-
-}
-
-/* Pre-emptive Shortest Job First (POLICY_PSJF) scheduling algorithm */
-static void sched_psjf() {
-	// - your own implementation of PSJF
-	// (feel free to modify arguments and return types)
-
-	// YOUR CODE HERE
 }
 
 
@@ -417,6 +422,11 @@ void print_queue(queue* q) {
 	printf("--------DONE_PRINTING--------\n");
 }
 
+void handler(int signum) {
+	if (DEBUG) puts("---DING DING TIMER ---");
+	swapcontext(&running->context, &sched_ctx);
+}
+
 /* initializes scheduler context */
 void init_sched_ctx() {
 		// TODO: memory cleanup for sched_ctx stack
@@ -447,20 +457,20 @@ void init_timer() {
 	if (DEBUG) puts("in timer");
 	struct sigaction sa;
 	memset (&sa, 0, sizeof (sa));
-	sa.sa_handler = &schedule;
+	sa.sa_handler = &handler;
 	sigaction (SIGPROF, &sa, NULL);
 
 	struct itimerval timer;
 
 	// Set up what the timer should reset to after the timer goes off
-	timer.it_interval.tv_usec = 1; 
+	timer.it_interval.tv_usec = QUANTUM; 
 	timer.it_interval.tv_sec = 0;
 
 	// Set up the current timer to go off in 1 useconds
 	// Note: if both of the following values are zero
 	//       the timer will not be active, and the timer
 	//       will never go off even if you set the interval value
-	timer.it_value.tv_usec = 1;
+	timer.it_value.tv_usec = QUANTUM;
 	timer.it_value.tv_sec = 0;
 
 	// Set the timer up (start the timer)
@@ -471,6 +481,7 @@ int find_wait(worker_t find){
 	node* walk = runqueue->front;
 		while(walk != NULL) {
 			if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
+			if (DEBUG) printf("WALKING: Thread ID# = %u\n", find);
 
 			// The thread is still running
 			if (walk->block->id == find) {
@@ -481,4 +492,60 @@ int find_wait(worker_t find){
 			walk = walk->next;
 		}
 	return 1;
+}
+
+tcb* find_shortest_job(queue* q) {
+	// walk through queue to find min job time
+	node* walk = q->front;
+	if (walk->next == NULL) {
+		return dequeue(q);
+	}
+	int min = walk->block->elapsed;
+	while(walk != NULL) {
+		if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
+		if (DEBUG) printf("WALKING: Thread TIME ELAPSED = %u\n", walk->block->elapsed);
+
+		// New minimum value is found
+		if (walk->block->elapsed < min) {
+			if (DEBUG) puts("updating minimum value");
+			min = walk->block->elapsed;
+		}
+		walk = walk->next;
+	}
+	walk = q->front;
+	node* walk_next = walk->next;
+
+	// if head of list is min
+	if (walk->block->elapsed == min) {
+		return dequeue(q);
+	}
+
+	// finds first thread that is equal to min time value
+	while(walk != NULL && walk_next != NULL) {
+		if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
+		if (DEBUG) printf("WALKING: Thread TIME ELAPSED = %u\n", walk->block->elapsed);
+
+		// Returns tcb with minimum time value
+		if (walk_next->block->elapsed == min) {
+			if (DEBUG) puts("updating minimum value");
+
+			// end of list
+			if (walk_next->next == NULL) {
+				walk->next = NULL;
+			// middle of list
+			} else {
+				walk->next = walk_next->next;
+			}
+
+			// free and return tcb for thread
+			tcb *temp = walk_next->block;
+			// clear memory for dequeued node
+			free(walk_next);
+			return temp;
+		}
+		walk = walk->next;
+		walk_next = walk_next->next;
+	}
+	// if find_shortest_job fails, return NULL
+	return NULL;
 }
