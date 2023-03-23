@@ -8,7 +8,7 @@
 
 // Macro for stack size of each thread
 #define STACK_SIZE SIGSTKSZ
-#define DEBUG 0
+#define DEBUG 1
 
 
 //Global counter for total context switches and 
@@ -23,6 +23,7 @@ static int id = 0;
 static int interval = 0;
 int init = 0;
 ucontext_t sched_ctx;
+// runqueue doubles as level 1 of the MLFQ
 queue* runqueue;
 tcb* running = NULL;
 queue* queues[LEVELS - 1];
@@ -156,15 +157,31 @@ int worker_join(worker_t thread, void **value_ptr) {
 	running->wait_id = thread;
 	if (DEBUG) printf("IN WORKER_JOIN: running->wait_id = %u\n", running->wait_id);
 	while (running->wait_id != -1) {
-		// thread waiting to join has terminiated
-		if ((find_wait(thread, runqueue) == 0) && (find_mutex_wait(thread) == 0)) {
-			running->wait_id = -1;
-		// thread is still running
-		} else {
-			running->status = WAITING;
-			tot_cntx_switches++;
-			swapcontext(&running->context, &sched_ctx);
-		}
+
+		// - schedule policy
+		#ifndef MLFQ
+			// thread waiting to join has terminiated
+			if ((find_wait(thread, runqueue) == 0) && (find_mutex_wait(thread) == 0)) {
+				running->wait_id = -1;
+			// thread is still running
+			} else {
+				running->status = WAITING;
+				tot_cntx_switches++;
+				swapcontext(&running->context, &sched_ctx);
+			}
+		#else 
+			// Choose MLFQ
+			// thread waiting to join has terminiated
+			if ((find_wait(thread, runqueue) == 0) && (find_mutex_wait(thread) == 0)
+				&& (find_wait(thread, queues[0]) == 0) && (find_wait(thread, queues[1]) == 0) && (find_wait(thread, queues[2]) == 0))  {
+				running->wait_id = -1;
+			// thread is still running
+			} else {
+				running->status = WAITING;
+				tot_cntx_switches++;
+				swapcontext(&running->context, &sched_ctx);
+			}
+		#endif
 	}
 	return 0;
 };
@@ -241,7 +258,8 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	tcb* walk = dequeue(mutex->wait);
 	while(walk != NULL) {
 		walk->status = READY;
-		walk->priority = 1;
+		// TODO: remove if we change prio elsewhere
+		//walk->priority = 1;
 		enqueue(runqueue, walk);
 		walk = dequeue(mutex->wait);
 	}
@@ -317,6 +335,7 @@ static void schedule() {
 	sched_psjf();
 #else 
 	// Choose MLFQ
+	sched_mlfq();
 #endif
 
 }
@@ -326,7 +345,7 @@ static void sched_psjf() {
 	// - your own implementation of PSJF
 	// (feel free to modify arguments and return types)
 
-	if (DEBUG) printf("in schedule\n");
+	if (DEBUG) printf("in PSJF schedule\n");
 
 	if (running != NULL) {
 		if (DEBUG) printf("running going into sched: %u\n", running->id);
@@ -341,9 +360,6 @@ static void sched_psjf() {
 			
 	} else if (DEBUG)  puts("running going into sched: NULL");
 
-	// puts("AFTER");
-
-	//running = dequeue(runqueue);
 	running = find_shortest_job(runqueue);
 
 	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n", running->id);
@@ -366,7 +382,83 @@ static void sched_mlfq() {
 	// - your own implementation of MLFQ
 	// (feel free to modify arguments and return types)
 
-	// YOUR CODE HERE
+	if (DEBUG) printf("in MLFQ schedule\n");
+
+	// Boost priority for all threads in all levels
+	if (interval == S) {
+		for (int i = 0; i < (LEVELS - 1); i++) {
+			tcb* temp = dequeue(queues[i]);
+			while(temp != NULL) {
+				temp->priority = 1;
+				enqueue(runqueue, temp);
+			}
+		}
+		// Reset time interval
+		interval = 0;
+	}
+
+	if (running != NULL) {
+		if (DEBUG) printf("running going into sched: %u\n", running->id);
+
+		if (running->status == RUNNING) {
+			running->status = READY;
+		}
+
+		if (running->status != BLOCKED) {
+			switch (running->priority) {
+				case 1:
+					// runqueue
+					enqueue(runqueue, running);
+					break;
+				case 2:
+					// level 2
+					enqueue(queues[0], running);
+					break;
+				case 3:
+					// level 3
+					enqueue(queues[1], running);
+					break;
+				case 4:
+					// level4
+					enqueue(queues[2], running);
+					break;
+				default:
+					printf("ERROR: Erronous MLFQ level value\n");
+			}
+		}		
+			
+	} else if (DEBUG)  puts("running going into sched: NULL");
+
+	//running = dequeue(runqueue);
+	if (runqueue->front != NULL) {
+		// enqueue from level 1 (runqueue)
+		running = dequeue(runqueue);
+	} else if (queues[0]->front != NULL) {
+		// enqueue from level 2
+		running = dequeue(queues[0]);
+	} else if (queues[1]->front != NULL) {
+		// enqueue from level 3
+		running = dequeue(queues[1]);
+	} else if (queues[2]->front != NULL) {
+		// enqueue from level 4
+		running = dequeue(queues[2]);
+	}
+
+	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n", running->id);
+
+	if (DEBUG) print_queue(runqueue);
+
+	running->elapsed++;
+	if (running->priority < LEVELS) {
+		running->priority++;
+	}
+	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n TIME CHUNKS ELAPSED: %u\n", running->id, running->elapsed);
+	tot_cntx_switches++;
+	if ((mutexes->mutex->wait != NULL) && (DEBUG)) {
+		puts("mutex wait list:");
+		print_queue(mutexes->mutex->wait);
+	} else if (DEBUG) puts("mutex wait list is empty");
+	setcontext(&running->context);
 }
 
 //DO NOT MODIFY THIS FUNCTION
@@ -403,6 +495,16 @@ void initialize() {
 
 	init_sched_ctx();
 	init_timer();
+
+	// - schedule policy
+	#ifndef MLFQ
+	#else 
+		// Choose MLFQ
+		for (int i = 0; i < (LEVELS - 1); i++) {
+			queues[i] = queue_init();
+		}
+	#endif
+
 	init = 1;
 }
 
@@ -473,6 +575,7 @@ void print_queue(queue* q) {
 		printf("Thread stack = %p\n", walk->block->threadStack);
 		printf("Thread function = %p\n", walk->block->func);
 		printf("Thread elapsed time = %u\n", walk->block->elapsed);
+		printf("Thread priority = %d\n", walk->block->priority);
 		printf("--------------------------\n");
 		walk = walk->next;
 	}
@@ -482,6 +585,11 @@ void print_queue(queue* q) {
 void handler(int signum) {
 	if (DEBUG) puts("---DING DING TIMER ---");
 	tot_cntx_switches++;
+	#ifndef MLFQ
+	#else 
+		// Choose MLFQ
+		interval++;
+	#endif
 	swapcontext(&running->context, &sched_ctx);
 }
 
@@ -544,7 +652,7 @@ void init_mutexes() {
 
 /* finds if thread is in queue q or not */
 int find_wait(worker_t find, queue* q) {
-	node* walk = runqueue->front;
+	node* walk = q->front;
 		while(walk != NULL) {
 			if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
 			if (DEBUG) printf("WALKING: Thread ID# = %u\n", find);
