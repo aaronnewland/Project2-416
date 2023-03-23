@@ -23,8 +23,13 @@
 #define LOCK 1
 #define UNLOCK 0
 
-// in micro seconds
-#define QUANTUM 10
+// in micro seconds (i.e. 10 ms)
+#define QUANTUM 10000
+
+// S is in intervals of QUANTUM
+#define S 10
+
+#define LEVELS 4
 
 /* include lib header files that you need here: */
 #include <sys/syscall.h>
@@ -71,25 +76,25 @@ typedef struct worker_mutex_t {
 	// set to 0 for unlock, and 1 for lock
 	int lock;
 	// queue of threads waiting to access mutex
-	struct Queue* wait;
+	struct queue* wait;
 } worker_mutex_t;
 
 /* define your data structures here: */
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
 
 /* node struct for linked list*/
-typedef struct Node {
+typedef struct node {
 	tcb *block;
-	struct Node* next;
+	struct node* next;
 } node;
 
-typedef struct Mutex_node {
+typedef struct mutex_node {
 	struct worker_mutex_t* mutex;
-	struct Mutex_node* next;
+	struct mutex_node* next;
 } mutex_node;
 
 /* queue struct for runqueue*/
-typedef struct Queue {
+typedef struct queue {
 	node *front, *back;
 } queue;
 
@@ -129,6 +134,10 @@ static void sched_mlfq();
 /* Function to print global statistics. Do not modify this function.*/
 void print_app_stats(void);
 
+/* Initializes required contexts and data structures on library 
+	first call.*/
+void initialize();
+
 /* node functions */
 /* create linked list node */
 node* node_create(tcb *block);
@@ -154,9 +163,16 @@ void handler(int signum);
 /* initializes timer */
 void init_timer();
 
-/* finds if thread is in runqueue or not */
-int find_wait(worker_t find);
+/* Initializes mutex list*/
+void init_mutexes();
 
+/* finds if thread is in queue q or not */
+int find_wait(worker_t find, queue* q);
+
+/* Finds if thread is currently blocked and in mutex waitlist*/
+int find_mutex_wait(worker_t find);
+
+/* find the shortest job left until completion based on previous time elapsed */
 tcb* find_shortest_job(queue* q);
 
 #ifdef USE_WORKERS

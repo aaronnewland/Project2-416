@@ -8,7 +8,7 @@
 
 // Macro for stack size of each thread
 #define STACK_SIZE SIGSTKSZ
-#define DEBUG 1
+#define DEBUG 0
 
 
 //Global counter for total context switches and 
@@ -20,12 +20,15 @@ double avg_resp_time=0;
 
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
 static int id = 0;
+static int interval = 0;
 int init = 0;
 ucontext_t sched_ctx;
 queue* runqueue;
 tcb* running = NULL;
-mutex_node* mutexes = NULL;
+queue* queues[LEVELS - 1];
 
+// TODO: delete probably
+mutex_node* mutexes = NULL;
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
@@ -37,43 +40,21 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
        // - make it ready for the execution.
 
 		// initialize scheduler on first call to worker_create.
-		if (init == 0) {
-			runqueue = queue_init();
+		if (init == 0) initialize();
 
-			// initialize bench_ctx
-			ucontext_t bench_ctx;
-			if (getcontext(&bench_ctx) < 0) {
-				perror("getcontext");
-				exit(1);
-			}
-			tcb *temp = (tcb*)malloc(sizeof(tcb));
-			temp->id = id;
-			temp->context = bench_ctx;
-			// push bench_ctx onto runqueue
-			enqueue(runqueue, temp);
-			// set running context to bench_ctx on first call
-			running = dequeue(runqueue);
-			running->status = RUNNING;
-
-			init_sched_ctx();
-			init_timer();
-			init = 1;
-		}
-
-		if (DEBUG) {
-			if (running != NULL) {
-				printf("BEGINNING OF WORKER_CREATE: running = %u\n", running->id);
-			}
+		if (DEBUG && running != NULL) {
+			printf("BEGINNING OF WORKER_CREATE: running = %u\n", running->id);
 		}
 
 		*thread = ++id;
 		tcb *control_block = (tcb*)malloc(sizeof(tcb));
 		control_block->id = *thread;
-		// Sets to READY status
 		control_block->status = READY;
 		control_block->thread = thread;
 		control_block->func = function;
 		control_block->elapsed = 0;
+		// Set defualt priority of 1
+		control_block->priority = 1;
 
 		// - allocate space of stack for this thread to run
 		void *stack = malloc(STACK_SIZE);
@@ -94,7 +75,13 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		ctx.uc_stack.ss_size = STACK_SIZE;
 		ctx.uc_stack.ss_flags = 0;
 
-		makecontext(&ctx, (void *)function, 0);
+		// Determine argument value
+		if (arg == NULL) {
+			makecontext(&ctx, (void *)function, 0);
+		} else {
+			makecontext(&ctx, (void *)function, 1, arg);
+		}
+		
 
 		// set context in TCB
 		control_block->context = ctx;
@@ -104,14 +91,12 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 
 		if (DEBUG) print_queue(runqueue);
 
-		// dummy FCFS
 		// call scheduler
+		tot_cntx_switches++;
 		swapcontext(&running->context, &sched_ctx); 
 
-		if (DEBUG) {
-			if (running != NULL) {
-				printf("END OF WORKER_CREATE: running = %u\n", running->id);
-			}
+		if (DEBUG && running != NULL) {
+			printf("END OF WORKER_CREATE: running = %u\n", running->id);		
 		}
 		if (DEBUG) print_queue(runqueue);
 
@@ -120,17 +105,20 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 
 /* give CPU possession to other user-level worker threads voluntarily */
 int worker_yield() {
+	if (init == 0) initialize();
 	if (DEBUG) puts("in yield");
 	// - change worker thread's state from Running to Ready
 	// - save context of this thread to its thread control block
 	running->status = READY;
 	// - switch from thread context to scheduler context
+	tot_cntx_switches++;
 	swapcontext(&running->context, &sched_ctx);
 	return 0;
 };
 
 /* terminate a thread */
 void worker_exit(void *value_ptr) {
+	if (init == 0) initialize();
 	// - de-allocate any dynamic memory created when starting this thread
 	if (value_ptr != NULL) {
 		// do stuff with saving the return value
@@ -146,12 +134,16 @@ void worker_exit(void *value_ptr) {
 
 
 	running = NULL;
+	tot_cntx_switches++;
 	setcontext(&sched_ctx);
 };
 
 
 /* Wait for thread termination */
 int worker_join(worker_t thread, void **value_ptr) {
+	if (init == 0) initialize();
+	// - wait for a specific thread to terminate
+	// - de-allocate any dynamic memory created by the joining thread
 	if (value_ptr != NULL) {
 		// do stuff with saving the return value
 	}
@@ -165,31 +157,31 @@ int worker_join(worker_t thread, void **value_ptr) {
 	if (DEBUG) printf("IN WORKER_JOIN: running->wait_id = %u\n", running->wait_id);
 	while (running->wait_id != -1) {
 		// thread waiting to join has terminiated
-		if (find_wait(thread) == 1) {
+		if ((find_wait(thread, runqueue) == 0) && (find_mutex_wait(thread) == 0)) {
 			running->wait_id = -1;
 		// thread is still running
 		} else {
 			running->status = WAITING;
+			tot_cntx_switches++;
 			swapcontext(&running->context, &sched_ctx);
 		}
 	}
-
-
-	// - wait for a specific thread to terminate
-	// - de-allocate any dynamic memory created by the joining thread
-
-	// YOUR CODE HERE
 	return 0;
 };
 
 /* initialize the mutex lock */
 int worker_mutex_init(worker_mutex_t *mutex, 
                           const pthread_mutexattr_t *mutexattr) {
-	if (mutexes == NULL) {
-		// DO STUFF
-	}
+	if (init == 0) initialize();
+	if (mutexes->mutex == NULL) init_mutexes();
 	//- initialize data structures for this mutex
 	if (DEBUG) printf("mutex_create = %p\n", mutex);
+
+	mutex_node *temp = (mutex_node*)malloc(sizeof(mutex_node));
+	mutexes->mutex = mutex;
+	mutexes->next = temp;
+	temp->mutex = NULL;
+	temp->next = NULL;
 
 	//mutex = (worker_mutex_t*)malloc(sizeof(worker_mutex_t));
 	// if (mutex == NULL) {
@@ -209,6 +201,7 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // - if acquiring mutex fails, push current thread into block list and
         // context switch to the scheduler thread
 
+		if (init == 0) initialize();
 		if (DEBUG) {
 			printf("BEGINNING mutex lock threadID: %u\n", running->id);
 			printf("BEGINNING mutex lock: %u\n", mutex->lock);
@@ -221,6 +214,7 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
 			if (DEBUG) printf("WAITLIST LOCK: ");
 			if (DEBUG) print_queue(mutex->wait);
 			//swapcontext(&running->context, &sched_ctx);
+			tot_cntx_switches++;
 			setcontext(&sched_ctx);
 		}
 
@@ -237,6 +231,7 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	// - put threads in block list to run queue 
 	// so that they could compete for mutex later.
 
+	if (init == 0) initialize();
 	mutex->lock = UNLOCK;
 
 	// if (running->status == BLOCKED) {
@@ -246,6 +241,7 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	tcb* walk = dequeue(mutex->wait);
 	while(walk != NULL) {
 		walk->status = READY;
+		walk->priority = 1;
 		enqueue(runqueue, walk);
 		walk = dequeue(mutex->wait);
 	}
@@ -259,6 +255,7 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex) {
+	if (init == 0) initialize();
 	if (DEBUG)  printf("mutex to destroy = %p\n", mutex);
 	// TODO: memory cleanup for freeing mutex if needed
 	// - de-allocate dynamic memory created in worker_mutex_init
@@ -270,6 +267,32 @@ int worker_mutex_destroy(worker_mutex_t *mutex) {
 
 	// queue is empty, destroy as normal
 	free(mutex->wait);
+	
+	mutex_node* walk = mutexes;
+	mutex_node* walk_next = mutexes->next;
+
+	// only one mutex in list
+	if (walk_next == NULL) {
+		free(walk);
+	}
+
+	while (walk != NULL && walk_next != NULL) {
+		if (walk_next->mutex == mutex) {
+			if (DEBUG) puts("we got it");
+
+			// end of list
+			if (walk_next->next == NULL) {
+				walk->next = NULL;
+			// middle of list
+			} else {
+				walk->next = walk_next->next;
+			}
+			free(walk_next);
+		}
+		walk = walk->next;
+		walk_next = walk_next->next;
+	}
+
 	//free(mutex);
 
 	return 0;
@@ -328,7 +351,12 @@ static void sched_psjf() {
 	if (DEBUG) print_queue(runqueue);
 
 	running->elapsed += 1;
-	printf("RUNNING AT END OF SCHED: %u\n TIME CHUNKS ELAPSED: %u\n", running->id, running->elapsed);
+	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n TIME CHUNKS ELAPSED: %u\n", running->id, running->elapsed);
+	tot_cntx_switches++;
+	if ((mutexes->mutex->wait != NULL) && (DEBUG)) {
+		puts("mutex wait list:");
+		print_queue(mutexes->mutex->wait);
+	} else if (DEBUG) puts("mutex wait list is empty");
 	setcontext(&running->context);
 }
 
@@ -348,6 +376,34 @@ void print_app_stats(void) {
        fprintf(stderr, "Total context switches %ld \n", tot_cntx_switches);
        fprintf(stderr, "Average turnaround time %lf \n", avg_turn_time);
        fprintf(stderr, "Average response time  %lf \n", avg_resp_time);
+}
+
+/* Initializes required contexts and data structures on library 
+	first call.*/
+void initialize() {
+	runqueue = queue_init();
+
+	init_mutexes();
+
+	// initialize bench_ctx
+	ucontext_t bench_ctx;
+	if (getcontext(&bench_ctx) < 0) {
+		perror("getcontext");
+		exit(1);
+	}
+	tcb *temp = (tcb*)malloc(sizeof(tcb));
+	temp->id = id;
+	temp->context = bench_ctx;
+	temp->priority = 1;
+	// push bench_ctx onto runqueue
+	enqueue(runqueue, temp);
+	// set running context to bench_ctx on first call
+	running = dequeue(runqueue);
+	running->status = RUNNING;
+
+	init_sched_ctx();
+	init_timer();
+	init = 1;
 }
 
 
@@ -416,6 +472,7 @@ void print_queue(queue* q) {
 		printf("Thread status = %u\n", walk->block->status);
 		printf("Thread stack = %p\n", walk->block->threadStack);
 		printf("Thread function = %p\n", walk->block->func);
+		printf("Thread elapsed time = %u\n", walk->block->elapsed);
 		printf("--------------------------\n");
 		walk = walk->next;
 	}
@@ -424,6 +481,7 @@ void print_queue(queue* q) {
 
 void handler(int signum) {
 	if (DEBUG) puts("---DING DING TIMER ---");
+	tot_cntx_switches++;
 	swapcontext(&running->context, &sched_ctx);
 }
 
@@ -477,7 +535,15 @@ void init_timer() {
 	setitimer(ITIMER_PROF, &timer, NULL);
 }
 
-int find_wait(worker_t find){
+/* Initializes mutex list*/
+void init_mutexes() {
+	mutexes = (mutex_node*)malloc(sizeof(mutex_node));
+	mutexes->mutex = NULL;
+	mutexes->next = NULL;
+}
+
+/* finds if thread is in queue q or not */
+int find_wait(worker_t find, queue* q) {
 	node* walk = runqueue->front;
 		while(walk != NULL) {
 			if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
@@ -486,15 +552,37 @@ int find_wait(worker_t find){
 			// The thread is still running
 			if (walk->block->id == find) {
 				if (DEBUG) puts("we found it!!");
-				return 0;
+				return 1;
 			}
 
 			walk = walk->next;
 		}
-	return 1;
+	// Thread "find" was not found in the given queue
+	return 0;
+}
+
+/* Finds if thread is currently blocked and in mutex waitlist*/
+int find_mutex_wait(worker_t find) {
+	mutex_node* walk = mutexes;
+	while(walk->mutex != NULL) {
+		node* inside_walk = walk->mutex->wait->front;
+		while(inside_walk != NULL) {
+		// The thread is blocked by mutex
+		if (inside_walk->block->id == find) {
+			if (DEBUG) puts("(in mutex) we found it!!");
+			return 1;
+		}
+
+		inside_walk = inside_walk->next;
+		}
+		walk = mutexes->next;
+	}
+	// Thread "find" was not found in any mutex wait list.
+	return 0;
 }
 
 tcb* find_shortest_job(queue* q) {
+	if (DEBUG) puts("----------- IN FIND SHORTEST JOB -----------");
 	// walk through queue to find min job time
 	node* walk = q->front;
 	if (walk->next == NULL) {
@@ -541,6 +629,7 @@ tcb* find_shortest_job(queue* q) {
 			tcb *temp = walk_next->block;
 			// clear memory for dequeued node
 			free(walk_next);
+			if (DEBUG) printf("SHORTEST JOB: Thread ID# = %u\n", temp->id);
 			return temp;
 		}
 		walk = walk->next;
