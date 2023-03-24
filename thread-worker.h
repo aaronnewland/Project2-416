@@ -41,6 +41,7 @@
 #include <ucontext.h>
 #include <sys/time.h>
 #include <string.h>
+#include <time.h>
 
 typedef uint worker_t;
 
@@ -69,6 +70,8 @@ typedef struct TCB {
 	worker_t wait_id;
 	// holds mutex information
 	struct worker_mutex_t* mutex;
+	struct timespec start, tt_end;
+	struct timespec rt_end;
 } tcb; 
 
 /* mutex struct definition */

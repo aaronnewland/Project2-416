@@ -8,7 +8,7 @@
 
 // Macro for stack size of each thread
 #define STACK_SIZE SIGSTKSZ
-#define DEBUG 1
+#define DEBUG 0
 
 
 //Global counter for total context switches and 
@@ -21,6 +21,9 @@ double avg_resp_time=0;
 // INITAILIZE ALL YOUR OTHER VARIABLES HERE
 static int id = 0;
 static int interval = 0;
+static int num_threads = 0;
+double turn_time = 0;
+double resp_time = 0;
 int init = 0;
 ucontext_t sched_ctx;
 // runqueue doubles as level 1 of the MLFQ
@@ -89,6 +92,9 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 
 		// push new worker thread onto runqueue
 		enqueue(runqueue, control_block);
+		num_threads++;
+        clock_gettime(CLOCK_REALTIME, &control_block->start);
+
 
 		if (DEBUG) print_queue(runqueue);
 
@@ -124,6 +130,9 @@ void worker_exit(void *value_ptr) {
 	if (value_ptr != NULL) {
 		// do stuff with saving the return value
 	}
+
+	clock_gettime(CLOCK_REALTIME, &running->tt_end);
+	turn_time += (running->tt_end.tv_sec - running->start.tv_sec) * 1000 + (running->tt_end.tv_nsec - running->start.tv_nsec) / 1000000;
 
 	free(running->threadStack);
 	free(running);
@@ -183,6 +192,8 @@ int worker_join(worker_t thread, void **value_ptr) {
 			}
 		#endif
 	}
+	avg_turn_time = turn_time / num_threads;
+	avg_resp_time = resp_time / num_threads;
 	return 0;
 };
 
@@ -259,8 +270,26 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	while(walk != NULL) {
 		walk->status = READY;
 		// TODO: remove if we change prio elsewhere
-		//walk->priority = 1;
-		enqueue(runqueue, walk);
+		switch (walk->priority) {
+			case 1:
+				// runqueue
+				enqueue(runqueue, walk);
+				break;
+			case 2:
+				// level 2
+				enqueue(queues[0], walk);
+				break;
+			case 3:
+				// level 3
+				enqueue(queues[1], walk);
+				break;
+			case 4:
+				// level4
+				enqueue(queues[2], walk);
+				break;
+			default:
+				printf("ERROR: Erronous MLFQ level value\n");
+		}
 		walk = dequeue(mutex->wait);
 	}
 
@@ -366,7 +395,12 @@ static void sched_psjf() {
 
 	if (DEBUG) print_queue(runqueue);
 
-	running->elapsed += 1;
+	running->elapsed++;
+	if (running->elapsed == 1) {
+		 clock_gettime(CLOCK_REALTIME, &running->rt_end);
+		 //printf("Total run time: %lu micro-seconds\n", (running->rt_end.tv_sec - running->start.tv_sec) * 1000 + (running->rt_end.tv_nsec - running->start.tv_nsec) / 1000000);
+		 resp_time += (running->rt_end.tv_sec - running->start.tv_sec) * 1000 + (running->rt_end.tv_nsec - running->start.tv_nsec) / 1000000;
+	}
 	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n TIME CHUNKS ELAPSED: %u\n", running->id, running->elapsed);
 	tot_cntx_switches++;
 	if ((mutexes->mutex->wait != NULL) && (DEBUG)) {
@@ -446,9 +480,25 @@ static void sched_mlfq() {
 
 	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n", running->id);
 
-	if (DEBUG) print_queue(runqueue);
+	if (DEBUG) {
+		puts("--- runqueue ---");
+		print_queue(runqueue);
+
+		puts("--- level2 ---");
+		print_queue(queues[0]);
+
+		puts("--- level3 ---");
+		print_queue(queues[1]);
+
+		puts("--- level4 ---");
+		print_queue(queues[2]);
+	} 
 
 	running->elapsed++;
+	if (running->elapsed == 1) {
+		clock_gettime(CLOCK_REALTIME, &running->rt_end);
+		resp_time += (running->rt_end.tv_sec - running->start.tv_sec) * 1000 + (running->rt_end.tv_nsec - running->start.tv_nsec) / 1000000;
+	}
 	if (running->priority < LEVELS) {
 		running->priority++;
 	}
@@ -487,6 +537,8 @@ void initialize() {
 	temp->id = id;
 	temp->context = bench_ctx;
 	temp->priority = 1;
+	num_threads++;
+    clock_gettime(CLOCK_REALTIME, &temp->start);
 	// push bench_ctx onto runqueue
 	enqueue(runqueue, temp);
 	// set running context to bench_ctx on first call
