@@ -87,6 +87,7 @@ void verify() {
 		}
 		fclose(f);
 	}
+	printf("verified sum is: %d\n", sum);
 }
 
 

@@ -96,6 +96,12 @@ typedef struct mutex_node {
 	struct mutex_node* next;
 } mutex_node;
 
+typedef struct rv_node {
+	void* rv;
+	int id;
+	struct rv_node* next;
+} rv_node;
+
 /* queue struct for runqueue*/
 typedef struct queue {
 	node *front, *back;
@@ -168,6 +174,9 @@ void init_timer();
 
 /* Initializes mutex list*/
 void init_mutexes();
+
+/* Initializes return values list*/
+void init_rvs();
 
 /* finds if thread is in queue q or not */
 int find_wait(worker_t find, queue* q);

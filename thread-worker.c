@@ -30,9 +30,8 @@ ucontext_t sched_ctx;
 queue* runqueue;
 tcb* running = NULL;
 queue* queues[LEVELS - 1];
-
-// TODO: delete probably
 mutex_node* mutexes = NULL;
+// rv_node* return_val = NULL;
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
@@ -128,7 +127,13 @@ void worker_exit(void *value_ptr) {
 	if (init == 0) initialize();
 	// - de-allocate any dynamic memory created when starting this thread
 	if (value_ptr != NULL) {
-		// do stuff with saving the return value
+		// rv_node* temp = return_val;
+		// while (temp->next != NULL) {
+		// 	temp = temp->next;
+		// }
+		// temp->rv = value_ptr;
+		// temp->id = running->id;
+		// temp->next = NULL;
 	}
 
 	clock_gettime(CLOCK_REALTIME, &running->tt_end);
@@ -154,10 +159,6 @@ int worker_join(worker_t thread, void **value_ptr) {
 	if (init == 0) initialize();
 	// - wait for a specific thread to terminate
 	// - de-allocate any dynamic memory created by the joining thread
-	if (value_ptr != NULL) {
-		// do stuff with saving the return value
-	}
-
 	if (DEBUG) {
 		printf("IN WORKER_JOIN: thread = %u\n", thread);
 		printf("IN WORKER_JOIN: running id = %u\n", running->id);
@@ -192,6 +193,29 @@ int worker_join(worker_t thread, void **value_ptr) {
 			}
 		#endif
 	}
+
+	// if (value_ptr != NULL) {
+	// 	rv_node* temp = return_val;
+	// 	while (temp->id != running->id) {
+	// 		temp = temp->next;
+	// 	}
+	// 	if (temp->id != running->id) {
+	// 		// error, thread not found
+	// 	}
+
+	// 	// head case
+	// 	if (temp->next == NULL) {
+	// 		temp->rv = NULL;
+	// 		temp->id = -1;
+	// 		temp->next NULL;
+	// 	}
+
+	// 	*value_ptr = temp->rv;
+	// 	temp->rv = value_ptr;
+	// 	temp->id = running->id;
+	// 	temp->next = NULL;
+	// }
+
 	avg_turn_time = turn_time / num_threads;
 	avg_resp_time = resp_time / num_threads;
 	return 0;
@@ -425,6 +449,7 @@ static void sched_mlfq() {
 			while(temp != NULL) {
 				temp->priority = 1;
 				enqueue(runqueue, temp);
+				temp = dequeue(queues[i]);
 			}
 		}
 		// Reset time interval
@@ -526,6 +551,7 @@ void initialize() {
 	runqueue = queue_init();
 
 	init_mutexes();
+	// init_rvs();
 
 	// initialize bench_ctx
 	ucontext_t bench_ctx;
@@ -700,6 +726,14 @@ void init_mutexes() {
 	mutexes = (mutex_node*)malloc(sizeof(mutex_node));
 	mutexes->mutex = NULL;
 	mutexes->next = NULL;
+}
+
+/* Initializes mutex list*/
+void init_rvs() {
+	// return_val = (rv_node*)malloc(sizeof(rv_node));
+	// return_val->rv = NULL;
+	// return_val->id = -1;
+	// return_val->next = NULL;
 }
 
 /* finds if thread is in queue q or not */
