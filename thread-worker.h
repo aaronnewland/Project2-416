@@ -27,7 +27,7 @@
 #define QUANTUM 10000
 
 // S is in intervals of QUANTUM
-#define S 10
+#define S 15
 
 #define LEVELS 4
 

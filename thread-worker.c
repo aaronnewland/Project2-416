@@ -1,8 +1,8 @@
 // File:	thread-worker.c
 
-// List all group member's name:
-// username of iLab:
-// iLab Server:
+// List all group member's name: Aaron Newland, Tyler Radziemski 
+// username of iLab: asn89, tjr151
+// iLab Server: Frost, Candle
 
 #include "thread-worker.h"
 
@@ -31,7 +31,7 @@ queue* runqueue;
 tcb* running = NULL;
 queue* queues[LEVELS - 1];
 mutex_node* mutexes = NULL;
-// rv_node* return_val = NULL;
+rv_node* return_val = NULL;
 
 /* create a new thread */
 int worker_create(worker_t * thread, pthread_attr_t * attr, 
@@ -127,13 +127,13 @@ void worker_exit(void *value_ptr) {
 	if (init == 0) initialize();
 	// - de-allocate any dynamic memory created when starting this thread
 	if (value_ptr != NULL) {
-		// rv_node* temp = return_val;
-		// while (temp->next != NULL) {
-		// 	temp = temp->next;
-		// }
-		// temp->rv = value_ptr;
-		// temp->id = running->id;
-		// temp->next = NULL;
+		rv_node* temp = return_val;
+		while (temp->next != NULL) {
+			temp = temp->next;
+		}
+		temp->rv = value_ptr;
+		temp->id = running->id;
+		temp->next = NULL;
 	}
 
 	clock_gettime(CLOCK_REALTIME, &running->tt_end);
@@ -193,28 +193,43 @@ int worker_join(worker_t thread, void **value_ptr) {
 			}
 		#endif
 	}
+	/*
+		Report
+		Return values
+		debugging
+		memory cleanup
 
-	// if (value_ptr != NULL) {
-	// 	rv_node* temp = return_val;
-	// 	while (temp->id != running->id) {
-	// 		temp = temp->next;
-	// 	}
-	// 	if (temp->id != running->id) {
-	// 		// error, thread not found
-	// 	}
+	*/
 
-	// 	// head case
-	// 	if (temp->next == NULL) {
-	// 		temp->rv = NULL;
-	// 		temp->id = -1;
-	// 		temp->next NULL;
-	// 	}
+	if (value_ptr != NULL) {
+		rv_node* walk = return_val;
+		rv_node* walk_next = return_val->next;
 
-	// 	*value_ptr = temp->rv;
-	// 	temp->rv = value_ptr;
-	// 	temp->id = running->id;
-	// 	temp->next = NULL;
-	// }
+		// only one return val in list
+		if (walk_next == NULL) {
+			free(walk);
+		}
+
+		while (walk != NULL && walk_next != NULL) {
+			if (walk_next->id == running->id) {
+				*value_ptr = walk->rv;
+
+				// end of list
+				if (walk_next->next == NULL) {
+					walk->next = NULL;
+				// middle of list
+				} else {
+					walk->next = walk_next->next;
+				}
+				free(walk_next);
+			}
+			walk = walk->next;
+			walk_next = walk_next->next;
+		}
+		if (walk->id != running->id) {
+			// error, thread not found
+		}
+	}
 
 	avg_turn_time = turn_time / num_threads;
 	avg_resp_time = resp_time / num_threads;
