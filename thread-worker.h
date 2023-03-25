@@ -1,8 +1,8 @@
 // File:	worker_t.h
 
-// List all group member's name:
-// username of iLab:
-// iLab Server:
+// List all group member's name: Aaron Newland, Tyler Radziemski 
+// username of iLab: asn89, tjr151
+// iLab Server: Frost, Candle
 
 #ifndef WORKER_T_H
 #define WORKER_T_H
@@ -27,7 +27,7 @@
 #define QUANTUM 10000
 
 // S is in intervals of QUANTUM
-#define S 15
+#define S 10
 
 #define LEVELS 4
 
@@ -46,7 +46,6 @@
 typedef uint worker_t;
 
 typedef struct TCB {
-	/* add important states in a thread control block */
 	// thread Id
 	int id;
 	// thread status
@@ -70,6 +69,7 @@ typedef struct TCB {
 	worker_t wait_id;
 	// holds mutex information
 	struct worker_mutex_t* mutex;
+	// holds time metric information
 	struct timespec start, tt_end;
 	struct timespec rt_end;
 } tcb; 
@@ -85,7 +85,7 @@ typedef struct worker_mutex_t {
 /* define your data structures here: */
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
 
-/* node struct for linked list*/
+/* node structs for linked list*/
 typedef struct node {
 	tcb *block;
 	struct node* next;
@@ -135,8 +135,13 @@ int worker_mutex_unlock(worker_mutex_t *mutex);
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex);
 
+/* scheduler */
 static void schedule();
+
+/* Pre-emptive Shortest Job First (POLICY_PSJF) scheduling algorithm */
 static void sched_psjf();
+
+/* Preemptive MLFQ scheduling algorithm */
 static void sched_mlfq();
 
 
@@ -161,12 +166,10 @@ void enqueue(queue* q, tcb *block);
 /* dequeue node */
 tcb* dequeue(queue* q);
 
-/* prints out all nodes in queue from front to back */
-void print_queue(queue* q);
-
 /* initializes scheduler context */
 void init_sched_ctx();
 
+/* handler for timer */
 void handler(int signum);
 
 /* initializes timer */

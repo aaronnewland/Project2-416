@@ -8,7 +8,6 @@
 
 // Macro for stack size of each thread
 #define STACK_SIZE SIGSTKSZ
-#define DEBUG 0
 
 
 //Global counter for total context switches and 
@@ -44,10 +43,6 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 
 		// initialize scheduler on first call to worker_create.
 		if (init == 0) initialize();
-
-		if (DEBUG && running != NULL) {
-			printf("BEGINNING OF WORKER_CREATE: running = %u\n", running->id);
-		}
 
 		*thread = ++id;
 		tcb *control_block = (tcb*)malloc(sizeof(tcb));
@@ -94,17 +89,9 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 		num_threads++;
         clock_gettime(CLOCK_REALTIME, &control_block->start);
 
-
-		if (DEBUG) print_queue(runqueue);
-
 		// call scheduler
 		tot_cntx_switches++;
 		swapcontext(&running->context, &sched_ctx); 
-
-		if (DEBUG && running != NULL) {
-			printf("END OF WORKER_CREATE: running = %u\n", running->id);		
-		}
-		if (DEBUG) print_queue(runqueue);
 
     return 0;
 };
@@ -112,7 +99,6 @@ int worker_create(worker_t * thread, pthread_attr_t * attr,
 /* give CPU possession to other user-level worker threads voluntarily */
 int worker_yield() {
 	if (init == 0) initialize();
-	if (DEBUG) puts("in yield");
 	// - change worker thread's state from Running to Ready
 	// - save context of this thread to its thread control block
 	running->status = READY;
@@ -142,12 +128,6 @@ void worker_exit(void *value_ptr) {
 	free(running->threadStack);
 	free(running);
 
-	if (DEBUG) {
-		printf("in exit: \n");
-		print_queue(runqueue);
-	}
-
-
 	running = NULL;
 	tot_cntx_switches++;
 	setcontext(&sched_ctx);
@@ -159,13 +139,8 @@ int worker_join(worker_t thread, void **value_ptr) {
 	if (init == 0) initialize();
 	// - wait for a specific thread to terminate
 	// - de-allocate any dynamic memory created by the joining thread
-	if (DEBUG) {
-		printf("IN WORKER_JOIN: thread = %u\n", thread);
-		printf("IN WORKER_JOIN: running id = %u\n", running->id);
-	}
 
 	running->wait_id = thread;
-	if (DEBUG) printf("IN WORKER_JOIN: running->wait_id = %u\n", running->wait_id);
 	while (running->wait_id != -1) {
 
 		// - schedule policy
@@ -193,13 +168,6 @@ int worker_join(worker_t thread, void **value_ptr) {
 			}
 		#endif
 	}
-	/*
-		Report
-		Return values
-		debugging
-		memory cleanup
-
-	*/
 
 	if (value_ptr != NULL) {
 		rv_node* walk = return_val;
@@ -242,7 +210,6 @@ int worker_mutex_init(worker_mutex_t *mutex,
 	if (init == 0) initialize();
 	if (mutexes->mutex == NULL) init_mutexes();
 	//- initialize data structures for this mutex
-	if (DEBUG) printf("mutex_create = %p\n", mutex);
 
 	mutex_node *temp = (mutex_node*)malloc(sizeof(mutex_node));
 	mutexes->mutex = mutex;
@@ -269,26 +236,13 @@ int worker_mutex_lock(worker_mutex_t *mutex) {
         // context switch to the scheduler thread
 
 		if (init == 0) initialize();
-		if (DEBUG) {
-			printf("BEGINNING mutex lock threadID: %u\n", running->id);
-			printf("BEGINNING mutex lock: %u\n", mutex->lock);
-		}
     
 		while (__sync_lock_test_and_set(&mutex->lock, LOCK)) {
-			if (DEBUG) puts("I'm in the while for mutx");
 			running->status = BLOCKED;
 			enqueue(mutex->wait, running);
-			if (DEBUG) printf("WAITLIST LOCK: ");
-			if (DEBUG) print_queue(mutex->wait);
-			//swapcontext(&running->context, &sched_ctx);
 			tot_cntx_switches++;
 			setcontext(&sched_ctx);
 		}
-
-		if (DEBUG) printf("END mutex lock: %u\n", mutex->lock);
-        
-
-
         return 0;
 };
 
@@ -301,14 +255,9 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 	if (init == 0) initialize();
 	mutex->lock = UNLOCK;
 
-	// if (running->status == BLOCKED) {
-	// 	running->status = RUNNING;
-	// }
-
 	tcb* walk = dequeue(mutex->wait);
 	while(walk != NULL) {
 		walk->status = READY;
-		// TODO: remove if we change prio elsewhere
 		switch (walk->priority) {
 			case 1:
 				// runqueue
@@ -326,15 +275,9 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 				// level4
 				enqueue(queues[2], walk);
 				break;
-			default:
-				printf("ERROR: Erronous MLFQ level value\n");
 		}
 		walk = dequeue(mutex->wait);
 	}
-
-	if (DEBUG) printf("WAITLIST UNLOCK: ");
-	if (DEBUG) print_queue(mutex->wait);
-
 	return 0;
 };
 
@@ -342,7 +285,6 @@ int worker_mutex_unlock(worker_mutex_t *mutex) {
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex) {
 	if (init == 0) initialize();
-	if (DEBUG)  printf("mutex to destroy = %p\n", mutex);
 	// TODO: memory cleanup for freeing mutex if needed
 	// - de-allocate dynamic memory created in worker_mutex_init
 	// if(dequeue(mutex->wait) != NULL) {
@@ -364,8 +306,6 @@ int worker_mutex_destroy(worker_mutex_t *mutex) {
 
 	while (walk != NULL && walk_next != NULL) {
 		if (walk_next->mutex == mutex) {
-			if (DEBUG) puts("we got it");
-
 			// end of list
 			if (walk_next->next == NULL) {
 				walk->next = NULL;
@@ -378,8 +318,6 @@ int worker_mutex_destroy(worker_mutex_t *mutex) {
 		walk = walk->next;
 		walk_next = walk_next->next;
 	}
-
-	//free(mutex);
 
 	return 0;
 };
@@ -413,10 +351,7 @@ static void sched_psjf() {
 	// - your own implementation of PSJF
 	// (feel free to modify arguments and return types)
 
-	if (DEBUG) printf("in PSJF schedule\n");
-
 	if (running != NULL) {
-		if (DEBUG) printf("running going into sched: %u\n", running->id);
 
 		if (running->status == RUNNING) {
 			running->status = READY;
@@ -426,26 +361,16 @@ static void sched_psjf() {
 			enqueue(runqueue, running);	
 		}		
 			
-	} else if (DEBUG)  puts("running going into sched: NULL");
+	}
 
 	running = find_shortest_job(runqueue);
-
-	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n", running->id);
-
-	if (DEBUG) print_queue(runqueue);
 
 	running->elapsed++;
 	if (running->elapsed == 1) {
 		 clock_gettime(CLOCK_REALTIME, &running->rt_end);
-		 //printf("Total run time: %lu micro-seconds\n", (running->rt_end.tv_sec - running->start.tv_sec) * 1000 + (running->rt_end.tv_nsec - running->start.tv_nsec) / 1000000);
 		 resp_time += (running->rt_end.tv_sec - running->start.tv_sec) * 1000 + (running->rt_end.tv_nsec - running->start.tv_nsec) / 1000000;
 	}
-	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n TIME CHUNKS ELAPSED: %u\n", running->id, running->elapsed);
 	tot_cntx_switches++;
-	if ((mutexes->mutex->wait != NULL) && (DEBUG)) {
-		puts("mutex wait list:");
-		print_queue(mutexes->mutex->wait);
-	} else if (DEBUG) puts("mutex wait list is empty");
 	setcontext(&running->context);
 }
 
@@ -454,8 +379,6 @@ static void sched_psjf() {
 static void sched_mlfq() {
 	// - your own implementation of MLFQ
 	// (feel free to modify arguments and return types)
-
-	if (DEBUG) printf("in MLFQ schedule\n");
 
 	// Boost priority for all threads in all levels
 	if (interval == S) {
@@ -472,7 +395,6 @@ static void sched_mlfq() {
 	}
 
 	if (running != NULL) {
-		if (DEBUG) printf("running going into sched: %u\n", running->id);
 
 		if (running->status == RUNNING) {
 			running->status = READY;
@@ -496,12 +418,10 @@ static void sched_mlfq() {
 					// level4
 					enqueue(queues[2], running);
 					break;
-				default:
-					printf("ERROR: Erronous MLFQ level value\n");
 			}
 		}		
 			
-	} else if (DEBUG)  puts("running going into sched: NULL");
+	}
 
 	//running = dequeue(runqueue);
 	if (runqueue->front != NULL) {
@@ -518,22 +438,6 @@ static void sched_mlfq() {
 		running = dequeue(queues[2]);
 	}
 
-	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n", running->id);
-
-	if (DEBUG) {
-		puts("--- runqueue ---");
-		print_queue(runqueue);
-
-		puts("--- level2 ---");
-		print_queue(queues[0]);
-
-		puts("--- level3 ---");
-		print_queue(queues[1]);
-
-		puts("--- level4 ---");
-		print_queue(queues[2]);
-	} 
-
 	running->elapsed++;
 	if (running->elapsed == 1) {
 		clock_gettime(CLOCK_REALTIME, &running->rt_end);
@@ -542,12 +446,7 @@ static void sched_mlfq() {
 	if (running->priority < LEVELS) {
 		running->priority++;
 	}
-	if (DEBUG) printf("RUNNING AT END OF SCHED: %u\n TIME CHUNKS ELAPSED: %u\n", running->id, running->elapsed);
 	tot_cntx_switches++;
-	if ((mutexes->mutex->wait != NULL) && (DEBUG)) {
-		puts("mutex wait list:");
-		print_queue(mutexes->mutex->wait);
-	} else if (DEBUG) puts("mutex wait list is empty");
 	setcontext(&running->context);
 }
 
@@ -651,32 +550,8 @@ tcb* dequeue(queue* q) {
 	return temp;
 }
 
-/* prints out all nodes in queue from front to back */
-void print_queue(queue* q) {
-	// check for empty queue
-	if (q->front == NULL) {
-		printf("Queue is Empty.\n");
-		return;
-	} 
-
-	node* walk = q->front;
-	printf("--------PRINTING_QUEUE--------\n");
-	while(walk != NULL) {
-		printf("Thread ID# = %u\n", walk->block->id);
-		printf("Thread address = %p\n", walk->block->thread);
-		printf("Thread status = %u\n", walk->block->status);
-		printf("Thread stack = %p\n", walk->block->threadStack);
-		printf("Thread function = %p\n", walk->block->func);
-		printf("Thread elapsed time = %u\n", walk->block->elapsed);
-		printf("Thread priority = %d\n", walk->block->priority);
-		printf("--------------------------\n");
-		walk = walk->next;
-	}
-	printf("--------DONE_PRINTING--------\n");
-}
-
+/* handler for timer */
 void handler(int signum) {
-	if (DEBUG) puts("---DING DING TIMER ---");
 	tot_cntx_switches++;
 	#ifndef MLFQ
 	#else 
@@ -713,7 +588,6 @@ void init_sched_ctx() {
 
 /* initializes timer */
 void init_timer() {
-	if (DEBUG) puts("in timer");
 	struct sigaction sa;
 	memset (&sa, 0, sizeof (sa));
 	sa.sa_handler = &handler;
@@ -721,18 +595,13 @@ void init_timer() {
 
 	struct itimerval timer;
 
-	// Set up what the timer should reset to after the timer goes off
+
 	timer.it_interval.tv_usec = QUANTUM; 
 	timer.it_interval.tv_sec = 0;
 
-	// Set up the current timer to go off in 1 useconds
-	// Note: if both of the following values are zero
-	//       the timer will not be active, and the timer
-	//       will never go off even if you set the interval value
 	timer.it_value.tv_usec = QUANTUM;
 	timer.it_value.tv_sec = 0;
 
-	// Set the timer up (start the timer)
 	setitimer(ITIMER_PROF, &timer, NULL);
 }
 
@@ -745,22 +614,18 @@ void init_mutexes() {
 
 /* Initializes mutex list*/
 void init_rvs() {
-	// return_val = (rv_node*)malloc(sizeof(rv_node));
-	// return_val->rv = NULL;
-	// return_val->id = -1;
-	// return_val->next = NULL;
+	return_val = (rv_node*)malloc(sizeof(rv_node));
+	return_val->rv = NULL;
+	return_val->id = -1;
+	return_val->next = NULL;
 }
 
 /* finds if thread is in queue q or not */
 int find_wait(worker_t find, queue* q) {
 	node* walk = q->front;
 		while(walk != NULL) {
-			if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
-			if (DEBUG) printf("WALKING: Thread ID# = %u\n", find);
-
 			// The thread is still running
 			if (walk->block->id == find) {
-				if (DEBUG) puts("we found it!!");
 				return 1;
 			}
 
@@ -778,7 +643,6 @@ int find_mutex_wait(worker_t find) {
 		while(inside_walk != NULL) {
 		// The thread is blocked by mutex
 		if (inside_walk->block->id == find) {
-			if (DEBUG) puts("(in mutex) we found it!!");
 			return 1;
 		}
 
@@ -790,8 +654,8 @@ int find_mutex_wait(worker_t find) {
 	return 0;
 }
 
+/* find the shortest job left until completion based on previous time elapsed */
 tcb* find_shortest_job(queue* q) {
-	if (DEBUG) puts("----------- IN FIND SHORTEST JOB -----------");
 	// walk through queue to find min job time
 	node* walk = q->front;
 	if (walk->next == NULL) {
@@ -799,12 +663,8 @@ tcb* find_shortest_job(queue* q) {
 	}
 	int min = walk->block->elapsed;
 	while(walk != NULL) {
-		if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
-		if (DEBUG) printf("WALKING: Thread TIME ELAPSED = %u\n", walk->block->elapsed);
-
 		// New minimum value is found
 		if (walk->block->elapsed < min) {
-			if (DEBUG) puts("updating minimum value");
 			min = walk->block->elapsed;
 		}
 		walk = walk->next;
@@ -819,13 +679,8 @@ tcb* find_shortest_job(queue* q) {
 
 	// finds first thread that is equal to min time value
 	while(walk != NULL && walk_next != NULL) {
-		if (DEBUG) printf("WALKING: Thread ID# = %u\n", walk->block->id);
-		if (DEBUG) printf("WALKING: Thread TIME ELAPSED = %u\n", walk->block->elapsed);
-
 		// Returns tcb with minimum time value
 		if (walk_next->block->elapsed == min) {
-			if (DEBUG) puts("updating minimum value");
-
 			// end of list
 			if (walk_next->next == NULL) {
 				walk->next = NULL;
@@ -838,7 +693,6 @@ tcb* find_shortest_job(queue* q) {
 			tcb *temp = walk_next->block;
 			// clear memory for dequeued node
 			free(walk_next);
-			if (DEBUG) printf("SHORTEST JOB: Thread ID# = %u\n", temp->id);
 			return temp;
 		}
 		walk = walk->next;
